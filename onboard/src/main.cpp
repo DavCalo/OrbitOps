@@ -2,17 +2,55 @@
 
 #include <arpa/inet.h>
 #include <algorithm>
+#include <atomic>
 #include <chrono>
 #include <cmath>
+#include <csignal>
 #include <cstdlib>
 #include <cstring>
+#include <iomanip>
 #include <iostream>
 #include <stdexcept>
 #include <string>
 #include <thread>
 #include <unistd.h>
 
+#ifndef ORBITOPS_VERSION
+#define ORBITOPS_VERSION "development"
+#endif
+
 namespace {
+
+std::atomic_bool g_running{true};
+
+void handle_signal(int) {
+    g_running.store(false);
+}
+
+class UdpSocket {
+public:
+    UdpSocket() : fd_(::socket(AF_INET, SOCK_DGRAM, 0)) {
+        if (fd_ < 0) {
+            throw std::runtime_error("could not create UDP socket");
+        }
+    }
+
+    ~UdpSocket() {
+        if (fd_ >= 0) {
+            ::close(fd_);
+        }
+    }
+
+    UdpSocket(const UdpSocket&) = delete;
+    UdpSocket& operator=(const UdpSocket&) = delete;
+
+    [[nodiscard]] int get() const noexcept {
+        return fd_;
+    }
+
+private:
+    int fd_;
+};
 
 struct Options {
     std::string host = "127.0.0.1";
@@ -25,7 +63,13 @@ struct Options {
 
 int parse_int(const char* value, const char* name) {
     try {
-        return std::stoi(value);
+        std::size_t consumed = 0;
+        const std::string text(value);
+        const int parsed = std::stoi(text, &consumed);
+        if (consumed != text.size()) {
+            throw std::runtime_error("trailing characters");
+        }
+        return parsed;
     } catch (const std::exception&) {
         throw std::runtime_error(std::string("invalid integer for ") + name);
     }
@@ -54,16 +98,22 @@ Options parse_options(int argc, char** argv) {
             options.drop_every = parse_int(require_value("--drop-every"), "--drop-every");
         } else if (arg == "--scenario") {
             options.scenario = require_value("--scenario");
+        } else if (arg == "--version") {
+            std::cout << "orbitops_sim " << ORBITOPS_VERSION << '\n';
+            std::exit(0);
         } else if (arg == "--help") {
             std::cout
                 << "OrbitOps on-board simulator\n\n"
+                << "Usage: orbitops_sim [options]\n\n"
                 << "Options:\n"
-                << "  --host HOST\n"
+                << "  --host IPv4\n"
                 << "  --port PORT\n"
                 << "  --interval-ms N\n"
                 << "  --packets N        0 means unlimited\n"
                 << "  --drop-every N     skip every Nth transmission\n"
-                << "  --scenario nominal|thermal|power\n";
+                << "  --scenario nominal|thermal|power\n"
+                << "  --version\n"
+                << "  --help\n";
             std::exit(0);
         } else {
             throw std::runtime_error("unknown argument: " + arg);
@@ -79,7 +129,8 @@ Options parse_options(int argc, char** argv) {
     if (options.packets < 0 || options.drop_every < 0) {
         throw std::runtime_error("packet counts cannot be negative");
     }
-    if (options.scenario != "nominal" && options.scenario != "thermal" && options.scenario != "power") {
+    if (options.scenario != "nominal" && options.scenario != "thermal" &&
+        options.scenario != "power") {
         throw std::runtime_error("scenario must be nominal, thermal, or power");
     }
     return options;
@@ -95,12 +146,12 @@ std::uint64_t now_ms() {
 orbitops::Telemetry make_telemetry(std::uint32_t sequence, const Options& options) {
     const double phase = static_cast<double>(sequence) / 8.0;
     double temperature = 24.0 + 1.8 * std::sin(phase);
-    double battery = 8.1 - 0.0025 * sequence;
+    double battery = 8.1 - 0.0025 * static_cast<double>(sequence);
 
     if (options.scenario == "thermal") {
-        temperature += 0.72 * sequence;
+        temperature += 0.72 * static_cast<double>(sequence);
     } else if (options.scenario == "power") {
-        battery -= 0.035 * sequence;
+        battery -= 0.035 * static_cast<double>(sequence);
     }
 
     orbitops::SpacecraftMode mode = orbitops::SpacecraftMode::Nominal;
@@ -114,21 +165,26 @@ orbitops::Telemetry make_telemetry(std::uint32_t sequence, const Options& option
     telemetry.sequence = sequence;
     telemetry.timestamp_ms = now_ms();
     telemetry.mode = mode;
-    telemetry.battery_mv = static_cast<std::uint16_t>(std::max(0.0, battery) * 1000.0);
-    telemetry.bus_current_ma = static_cast<std::uint16_t>(420.0 + 35.0 * std::sin(phase * 0.7));
-    telemetry.temperature_centi_c = static_cast<std::int16_t>(temperature * 100.0);
-    telemetry.roll_centi_deg = static_cast<std::int16_t>(450.0 * std::sin(phase * 0.5));
-    telemetry.pitch_centi_deg = static_cast<std::int16_t>(320.0 * std::cos(phase * 0.4));
+    telemetry.battery_mv = static_cast<std::uint16_t>(
+        std::round(std::max(0.0, battery) * 1000.0));
+    telemetry.bus_current_ma = static_cast<std::uint16_t>(
+        std::round(420.0 + 35.0 * std::sin(phase * 0.7)));
+    telemetry.temperature_centi_c = static_cast<std::int16_t>(std::round(temperature * 100.0));
+    telemetry.roll_centi_deg = static_cast<std::int16_t>(std::round(450.0 * std::sin(phase * 0.5)));
+    telemetry.pitch_centi_deg = static_cast<std::int16_t>(std::round(320.0 * std::cos(phase * 0.4)));
     telemetry.yaw_centi_deg = static_cast<std::int16_t>(
-        std::fmod(sequence * 725.0 + 18000.0, 36000.0) - 18000.0);
+        std::fmod(static_cast<double>(sequence) * 725.0 + 18000.0, 36000.0) - 18000.0);
     return telemetry;
 }
 
 const char* mode_name(orbitops::SpacecraftMode mode) {
     switch (mode) {
-        case orbitops::SpacecraftMode::Boot: return "BOOT";
-        case orbitops::SpacecraftMode::Nominal: return "NOMINAL";
-        case orbitops::SpacecraftMode::Safe: return "SAFE";
+        case orbitops::SpacecraftMode::Boot:
+            return "BOOT";
+        case orbitops::SpacecraftMode::Nominal:
+            return "NOMINAL";
+        case orbitops::SpacecraftMode::Safe:
+            return "SAFE";
     }
     return "UNKNOWN";
 }
@@ -138,45 +194,44 @@ const char* mode_name(orbitops::SpacecraftMode mode) {
 int main(int argc, char** argv) {
     try {
         const Options options = parse_options(argc, argv);
-        const int socket_fd = ::socket(AF_INET, SOCK_DGRAM, 0);
-        if (socket_fd < 0) {
-            throw std::runtime_error("could not create UDP socket");
-        }
+        std::signal(SIGINT, handle_signal);
+        std::signal(SIGTERM, handle_signal);
 
+        const UdpSocket socket;
         sockaddr_in destination{};
         destination.sin_family = AF_INET;
         destination.sin_port = htons(static_cast<std::uint16_t>(options.port));
         if (::inet_pton(AF_INET, options.host.c_str(), &destination.sin_addr) != 1) {
-            ::close(socket_fd);
             throw std::runtime_error("invalid IPv4 address: " + options.host);
         }
 
-        std::cout << "OrbitOps simulator -> " << options.host << ':' << options.port
-                  << " scenario=" << options.scenario << '\n';
+        std::cout << "OrbitOps simulator " << ORBITOPS_VERSION << " -> " << options.host << ':'
+                  << options.port << " scenario=" << options.scenario << '\n';
 
         std::uint32_t sequence = 0;
-        while (options.packets == 0 || static_cast<int>(sequence) < options.packets) {
+        while (g_running.load() &&
+               (options.packets == 0 || sequence < static_cast<std::uint32_t>(options.packets))) {
             const auto telemetry = make_telemetry(sequence, options);
-            const bool intentionally_dropped =
-                options.drop_every > 0 && sequence > 0 && sequence % options.drop_every == 0;
+            const bool intentionally_dropped = options.drop_every > 0 && sequence > 0 &&
+                                               sequence % static_cast<std::uint32_t>(options.drop_every) == 0;
 
             if (intentionally_dropped) {
                 std::cout << "DROP seq=" << sequence << " (fault injection)\n";
             } else {
                 const auto packet = orbitops::encode(telemetry);
                 const auto sent = ::sendto(
-                    socket_fd,
+                    socket.get(),
                     packet.data(),
                     packet.size(),
                     0,
                     reinterpret_cast<const sockaddr*>(&destination),
                     sizeof(destination));
                 if (sent != static_cast<ssize_t>(packet.size())) {
-                    ::close(socket_fd);
                     throw std::runtime_error("failed to send complete UDP packet");
                 }
 
-                std::cout << "TX seq=" << telemetry.sequence
+                std::cout << std::fixed << std::setprecision(2)
+                          << "TX seq=" << telemetry.sequence
                           << " mode=" << mode_name(telemetry.mode)
                           << " battery=" << telemetry.battery_mv / 1000.0 << "V"
                           << " temp=" << telemetry.temperature_centi_c / 100.0 << "C\n";
@@ -186,7 +241,7 @@ int main(int argc, char** argv) {
             std::this_thread::sleep_for(std::chrono::milliseconds(options.interval_ms));
         }
 
-        ::close(socket_fd);
+        std::cout << "OrbitOps simulator stopped after " << sequence << " cycle(s).\n";
         return 0;
     } catch (const std::exception& exc) {
         std::cerr << "error: " << exc.what() << '\n';

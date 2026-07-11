@@ -36,9 +36,7 @@ def process_packet(raw: bytes, engine: AlarmEngine) -> None:
 def listen(host: str, port: int, record_path: Path | None = None) -> None:
     engine = AlarmEngine()
     recorder_context = (
-        SessionRecorder(record_path)
-        if record_path is not None
-        else contextlib.nullcontext()
+        SessionRecorder(record_path) if record_path is not None else contextlib.nullcontext()
     )
 
     with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock, recorder_context as recorder:

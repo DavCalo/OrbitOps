@@ -55,7 +55,31 @@ def _crc32(data: bytes) -> int:
     return binascii.crc32(data) & 0xFFFFFFFF
 
 
+def _require_range(name: str, value: int, minimum: int, maximum: int) -> None:
+    if not minimum <= value <= maximum:
+        raise ProtocolError(f"{name} must be between {minimum} and {maximum}, got {value}")
+
+
+def _validate_packet(packet: TelemetryPacket) -> None:
+    _require_range("sequence", packet.sequence, 0, 0xFFFFFFFF)
+    _require_range("timestamp_ms", packet.timestamp_ms, 0, 0xFFFFFFFFFFFFFFFF)
+    _require_range("battery_mv", packet.battery_mv, 0, 0xFFFF)
+    _require_range("bus_current_ma", packet.bus_current_ma, 0, 0xFFFF)
+    for name, value in (
+        ("temperature_centi_c", packet.temperature_centi_c),
+        ("roll_centi_deg", packet.roll_centi_deg),
+        ("pitch_centi_deg", packet.pitch_centi_deg),
+        ("yaw_centi_deg", packet.yaw_centi_deg),
+    ):
+        _require_range(name, value, -0x8000, 0x7FFF)
+    try:
+        Mode(packet.mode)
+    except ValueError as exc:
+        raise ProtocolError(f"invalid mode: {packet.mode}") from exc
+
+
 def encode_packet(packet: TelemetryPacket) -> bytes:
+    _validate_packet(packet)
     body = _HEADER.pack(
         MAGIC,
         VERSION,
@@ -78,7 +102,7 @@ def decode_packet(data: bytes) -> TelemetryPacket:
         raise ProtocolError(f"expected {PACKET_SIZE} bytes, got {len(data)}")
 
     unpacked = _PACKET.unpack(data)
-    magic, version, _flags = unpacked[:3]
+    magic, version, flags = unpacked[:3]
     received_crc = unpacked[-1]
     calculated_crc = _crc32(data[:-4])
 
@@ -86,6 +110,8 @@ def decode_packet(data: bytes) -> TelemetryPacket:
         raise ProtocolError(f"invalid magic: {magic!r}")
     if version != VERSION:
         raise ProtocolError(f"unsupported version: {version}")
+    if flags != 0:
+        raise ProtocolError(f"unsupported flags: 0x{flags:02X}")
     if received_crc != calculated_crc:
         raise ProtocolError(
             f"CRC mismatch: received 0x{received_crc:08X}, calculated 0x{calculated_crc:08X}"

@@ -38,6 +38,19 @@ class AlarmTests(unittest.TestCase):
         codes = {alarm.code for alarm in engine.evaluate(self.packet(7))}
         self.assertIn("SEQUENCE_GAP", codes)
 
+    def test_sequence_wraparound_is_valid(self) -> None:
+        engine = AlarmEngine()
+        self.assertEqual(engine.evaluate(self.packet(0xFFFFFFFF)), [])
+        self.assertNotIn(
+            "SEQUENCE_GAP",
+            {alarm.code for alarm in engine.evaluate(self.packet(0))},
+        )
+
+    def test_elevated_temperature_warning(self) -> None:
+        engine = AlarmEngine()
+        codes = {alarm.code for alarm in engine.evaluate(self.packet(1, temperature_centi_c=5200))}
+        self.assertEqual(codes, {"ELEVATED_TEMPERATURE"})
+
     def test_critical_conditions(self) -> None:
         engine = AlarmEngine()
         codes = {

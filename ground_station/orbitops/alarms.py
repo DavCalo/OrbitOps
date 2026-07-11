@@ -22,7 +22,7 @@ class AlarmEngine:
         alarms: list[Alarm] = []
 
         if self._last_sequence is not None:
-            expected = self._last_sequence + 1
+            expected = (self._last_sequence + 1) & 0xFFFFFFFF
             if packet.sequence != expected:
                 alarms.append(
                     Alarm(

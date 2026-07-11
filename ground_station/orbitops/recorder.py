@@ -4,31 +4,40 @@ from __future__ import annotations
 
 import json
 import time
+from collections.abc import Iterator
 from pathlib import Path
-from typing import Iterator
+
+RECORD_VERSION = 1
 
 
 class SessionRecorder:
+    """Write a deterministic, line-delimited telemetry capture.
+
+    A new recorder replaces an existing file so repeated demos cannot silently
+    mix multiple sessions. Use separate paths when captures must be preserved.
+    """
+
     def __init__(self, path: Path) -> None:
         self.path = path
         self.path.parent.mkdir(parents=True, exist_ok=True)
-        self._file = path.open("a", encoding="utf-8")
+        self._file = path.open("w", encoding="utf-8")
 
     def write(self, raw_packet: bytes, received_at: float) -> None:
         record = {
+            "record_version": RECORD_VERSION,
             "received_at": received_at,
             "packet_hex": raw_packet.hex(),
         }
-        self._file.write(json.dumps(record, separators=(",", ":")) + "\n")
+        self._file.write(json.dumps(record, separators=(",", ":"), sort_keys=True) + "\n")
         self._file.flush()
 
     def close(self) -> None:
         self._file.close()
 
-    def __enter__(self) -> "SessionRecorder":
+    def __enter__(self) -> SessionRecorder:
         return self
 
-    def __exit__(self, exc_type, exc, tb) -> None:  # type: ignore[no-untyped-def]
+    def __exit__(self, exc_type: object, exc: object, tb: object) -> None:
         self.close()
 
 
@@ -43,11 +52,14 @@ def iter_records(path: Path, speed: float = 1.0) -> Iterator[bytes]:
                 continue
             try:
                 record = json.loads(line)
+                version = int(record["record_version"])
                 timestamp = float(record["received_at"])
                 packet = bytes.fromhex(record["packet_hex"])
             except (KeyError, TypeError, ValueError, json.JSONDecodeError) as exc:
                 raise ValueError(f"invalid record at line {line_number}") from exc
 
+            if version != RECORD_VERSION:
+                raise ValueError(f"unsupported record version {version} at line {line_number}")
             if previous_time is not None:
                 delay = max(0.0, timestamp - previous_time) / speed
                 time.sleep(delay)
