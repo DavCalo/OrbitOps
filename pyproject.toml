@@ -1,13 +1,81 @@
 [build-system]
-requires = ["setuptools>=68"]
+requires = ["setuptools>=77", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "orbitops-ground-station"
-version = "0.1.0"
+dynamic = ["version"]
 description = "Dependency-light CubeSat telemetry ground-station simulator"
+readme = "README.md"
 requires-python = ">=3.11"
+license = "MIT"
+license-files = ["LICENSE"]
 authors = [{ name = "Davide Calò" }]
+keywords = ["cubesat", "telemetry", "ground-station", "udp", "simulation"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Environment :: Console",
+  "Operating System :: MacOS",
+  "Operating System :: POSIX :: Linux",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Topic :: Scientific/Engineering",
+  "Typing :: Typed",
+]
+
+[project.optional-dependencies]
+dev = [
+  "build>=1.2,<2",
+  "coverage[toml]>=7.6,<8",
+  "mypy>=1.13,<2",
+  "ruff>=0.9,<1",
+]
+
+[project.scripts]
+orbitops = "orbitops.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/DavCalo/OrbitOps"
+Documentation = "https://github.com/DavCalo/OrbitOps/tree/main/docs"
+Repository = "https://github.com/DavCalo/OrbitOps.git"
+Issues = "https://github.com/DavCalo/OrbitOps/issues"
+Changelog = "https://github.com/DavCalo/OrbitOps/blob/main/CHANGELOG.md"
+
+[tool.setuptools.dynamic]
+version = { attr = "orbitops.__version__" }
 
 [tool.setuptools.packages.find]
 where = ["ground_station"]
+
+[tool.setuptools.package-data]
+orbitops = ["py.typed"]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+extend-exclude = ["build", "dist", ".venv"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM", "RUF"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["S101"]
+
+[tool.mypy]
+python_version = "3.11"
+mypy_path = "ground_station"
+strict = true
+show_error_codes = true
+exclude = ["build", "dist"]
+
+[tool.coverage.run]
+branch = true
+source = ["orbitops"]
+omit = ["ground_station/orbitops/__main__.py"]
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = true
+fail_under = 85

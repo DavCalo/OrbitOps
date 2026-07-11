@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
+from . import __version__
 from .alarms import AlarmEngine
 from .protocol import ProtocolError, decode_packet
 from .receiver import listen, process_packet
@@ -12,7 +13,15 @@ from .recorder import iter_records
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(prog="orbitops", description=__doc__)
+    parser = argparse.ArgumentParser(
+        prog="orbitops",
+        description="Receive, inspect, record, and replay OrbitOps telemetry.",
+    )
+    parser.add_argument(
+        "--version",
+        action="version",
+        version=f"%(prog)s {__version__}",
+    )
     subparsers = parser.add_subparsers(dest="command", required=True)
 
     listen_parser = subparsers.add_parser("listen", help="listen for UDP telemetry")
@@ -40,15 +49,24 @@ def main(argv: list[str] | None = None) -> int:
             listen(args.host, args.port, args.record)
         except KeyboardInterrupt:
             print("\nGround station stopped.")
+        except OSError as exc:
+            raise SystemExit(f"listen failed: {exc}") from exc
         return 0
 
     if args.command == "replay":
+        if args.speed <= 0:
+            raise SystemExit("speed must be positive")
+        if not args.path.is_file():
+            raise SystemExit(f"session file not found: {args.path}")
+
         engine = AlarmEngine()
         try:
             for raw in iter_records(args.path, args.speed):
                 process_packet(raw, engine)
         except KeyboardInterrupt:
             print("\nReplay stopped.")
+        except (OSError, ValueError, ProtocolError) as exc:
+            raise SystemExit(f"replay failed: {exc}") from exc
         return 0
 
     if args.command == "decode":

@@ -1,7 +1,13 @@
 __pycache__/
 *.py[cod]
+*.egg-info/
 .venv/
+.coverage
+htmlcov/
+.mypy_cache/
+.ruff_cache/
 build/
+dist/
 sessions/
 *.log
 .DS_Store

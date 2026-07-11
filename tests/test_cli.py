@@ -1,0 +1,88 @@
+from __future__ import annotations
+
+import contextlib
+import io
+import sys
+import tempfile
+import unittest
+from pathlib import Path
+from unittest.mock import patch
+
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / "ground_station"))
+
+from orbitops import __version__  # noqa: E402
+from orbitops.cli import main  # noqa: E402
+from orbitops.protocol import Mode, TelemetryPacket, encode_packet  # noqa: E402
+
+
+def encoded_packet() -> bytes:
+    return encode_packet(
+        TelemetryPacket(
+            sequence=1,
+            timestamp_ms=1,
+            mode=Mode.NOMINAL,
+            battery_mv=8100,
+            bus_current_ma=400,
+            temperature_centi_c=2500,
+            roll_centi_deg=0,
+            pitch_centi_deg=0,
+            yaw_centi_deg=0,
+        )
+    )
+
+
+class CliTests(unittest.TestCase):
+    def test_version(self) -> None:
+        output = io.StringIO()
+        with contextlib.redirect_stdout(output), self.assertRaises(SystemExit) as raised:
+            main(["--version"])
+        self.assertEqual(raised.exception.code, 0)
+        self.assertIn(__version__, output.getvalue())
+
+    def test_invalid_port(self) -> None:
+        with self.assertRaisesRegex(SystemExit, "port must be"):
+            main(["listen", "--port", "70000"])
+
+    def test_listen_delegates_to_receiver(self) -> None:
+        with patch("orbitops.cli.listen") as mocked:
+            self.assertEqual(main(["listen", "--port", "9010"]), 0)
+        mocked.assert_called_once_with("127.0.0.1", 9010, None)
+
+    def test_missing_replay_file(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            missing = Path(directory) / "missing.jsonl"
+            with self.assertRaisesRegex(SystemExit, "session file not found"):
+                main(["replay", str(missing)])
+
+    def test_invalid_replay_speed(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            session = Path(directory) / "session.jsonl"
+            session.write_text("", encoding="utf-8")
+            with self.assertRaisesRegex(SystemExit, "speed must be positive"):
+                main(["replay", str(session), "--speed", "0"])
+
+    def test_replay_processes_records(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            session = Path(directory) / "session.jsonl"
+            session.write_text("placeholder", encoding="utf-8")
+            with (
+                patch("orbitops.cli.iter_records", return_value=[encoded_packet()]),
+                patch("orbitops.cli.process_packet") as process,
+            ):
+                self.assertEqual(main(["replay", str(session)]), 0)
+            process.assert_called_once()
+
+    def test_decode_prints_packet(self) -> None:
+        output = io.StringIO()
+        with contextlib.redirect_stdout(output):
+            self.assertEqual(main(["decode", encoded_packet().hex()]), 0)
+        self.assertIn("'sequence': 1", output.getvalue())
+
+    def test_decode_rejects_invalid_hex(self) -> None:
+        with self.assertRaisesRegex(SystemExit, "decode failed"):
+            main(["decode", "not-hex"])
+
+
+if __name__ == "__main__":
+    unittest.main()

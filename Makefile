@@ -1,17 +1,45 @@
-.PHONY: build test integration clean
+.PHONY: bootstrap build clean configure integration package python-tests quality test verify
 
+PYTHON ?= python3
+CMAKE ?= cmake
 BUILD_DIR ?= build
+CMAKE_BUILD_TYPE ?= Release
 
-build:
-	cmake -S onboard -B $(BUILD_DIR) -DCMAKE_BUILD_TYPE=Release
-	cmake --build $(BUILD_DIR)
+bootstrap:
+	$(PYTHON) -m pip install --upgrade pip
+	$(PYTHON) -m pip install -e ".[dev]"
 
-test: build
-	python3 -m unittest discover -s tests -v
-	ctest --test-dir $(BUILD_DIR) --output-on-failure
+configure:
+	$(CMAKE) -S onboard -B $(BUILD_DIR) \
+		-DCMAKE_BUILD_TYPE=$(CMAKE_BUILD_TYPE) \
+		-DORBITOPS_WARNINGS_AS_ERRORS=ON
+
+build: configure
+	$(CMAKE) --build $(BUILD_DIR) --config $(CMAKE_BUILD_TYPE)
+
+python-tests:
+	$(PYTHON) -m unittest discover -s tests -v
+
+test: build python-tests
+	ctest --test-dir $(BUILD_DIR) --output-on-failure -C $(CMAKE_BUILD_TYPE)
 
 integration: build
-	python3 scripts/integration_check.py ./$(BUILD_DIR)/orbitops_sim
+	$(PYTHON) scripts/integration_check.py ./$(BUILD_DIR)/orbitops_sim
+
+quality:
+	$(PYTHON) -m ruff check .
+	$(PYTHON) -m ruff format --check .
+	$(PYTHON) -m mypy ground_station tests scripts
+	$(PYTHON) -m coverage erase
+	$(PYTHON) -m coverage run -m unittest discover -s tests -v
+	$(PYTHON) -m coverage report
+
+package:
+	rm -rf dist
+	$(PYTHON) -m build
+
+verify: quality test integration package
 
 clean:
-	rm -rf $(BUILD_DIR)
+	rm -rf $(BUILD_DIR) dist .coverage .mypy_cache .ruff_cache
+	find . -type d -name __pycache__ -prune -exec rm -rf {} +
