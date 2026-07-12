@@ -7,7 +7,7 @@ import socket
 import time
 from pathlib import Path
 
-from .alarms import AlarmEngine
+from .alarms import AlarmEngine, format_alarm_transition
 from .protocol import ProtocolError, TelemetryPacket, decode_packet
 from .recorder import SessionRecorder
 
@@ -28,9 +28,8 @@ def format_packet(packet: TelemetryPacket) -> str:
 def process_packet(raw: bytes, engine: AlarmEngine) -> None:
     packet = decode_packet(raw)
     print(format_packet(packet))
-    for alarm in engine.evaluate(packet):
-        marker = "!" if alarm.severity == "warning" else "!!"
-        print(f"  {marker} {alarm.severity.upper():8} {alarm.code}: {alarm.message}")
+    for transition in engine.evaluate(packet):
+        print(format_alarm_transition(transition))
 
 
 def listen(host: str, port: int, record_path: Path | None = None) -> None:
