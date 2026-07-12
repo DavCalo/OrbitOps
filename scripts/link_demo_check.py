@@ -36,7 +36,7 @@ def _wait_for_ready(process: subprocess.Popen[str]) -> str:
         selector.register(process.stdout, selectors.EVENT_READ)
         if not selector.select(timeout=5.0):
             raise RuntimeError("link CLI did not report readiness")
-        line = process.stdout.readline().strip()
+        line: str = process.stdout.readline().strip()
     finally:
         selector.close()
 
