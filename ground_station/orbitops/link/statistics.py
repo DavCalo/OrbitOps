@@ -76,6 +76,8 @@ def _statistics_from_values(values: Mapping[str, int]) -> LinkStatistics:
     )
 
 
+# RUN_METADATA and RUN_SUMMARY are deliberately absent. Schema 2 adds context
+# without changing the packet and delivery counter semantics established in v0.2.
 _EVENT_COUNTERS: dict[LinkEventType, str] = {
     LinkEventType.PACKET_RECEIVED: "packets_received",
     LinkEventType.PACKET_DROPPED: "packets_dropped",
@@ -100,6 +102,8 @@ def statistics_from_events(events: Iterable[LinkEvent]) -> LinkStatistics:
 
 
 def _stream_metadata(sequence: tuple[LinkEvent, ...]) -> LinkRunMetadata | None:
+    """Validate stream metadata while preserving schema-1 compatibility."""
+
     if not sequence:
         raise ValueError("event stream is empty")
     schema_versions = {event.schema_version for event in sequence}
@@ -143,7 +147,11 @@ def validate_run_summary(events: Iterable[LinkEvent]) -> LinkStatistics:
 
 
 class LinkEventStream:
-    """Assign stable indices, relative times, and statistics to emitted events."""
+    """Assign stable indices, relative times, and statistics to emitted events.
+
+    Run metadata occupies event index zero but never contributes to operational
+    counters.
+    """
 
     __slots__ = (
         "_closed",
@@ -199,6 +207,7 @@ class LinkEventStream:
         if self._sink is not None:
             self._sink(event)
 
+        # Only packet and delivery events appear in the counter map.
         counter = _EVENT_COUNTERS.get(event_type)
         if counter is not None:
             values = self._statistics.to_dict()

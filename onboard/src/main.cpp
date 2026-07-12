@@ -23,6 +23,28 @@ namespace {
 
 std::atomic_bool g_running{true};
 
+// Deterministic demonstration curves, not physical spacecraft models. Names
+// include units because these values are compatibility-sensitive to demos.
+constexpr double kScenarioPhaseDivisor = 8.0;
+constexpr double kNominalTemperatureC = 24.0;
+constexpr double kTemperatureOscillationC = 1.8;
+constexpr double kNominalBatteryV = 8.1;
+constexpr double kNominalBatteryDrainPerPacketV = 0.0025;
+constexpr double kThermalRisePerPacketC = 0.72;
+constexpr double kPowerDrainPerPacketV = 0.035;
+constexpr double kSafeTemperatureC = 60.0;
+constexpr double kSafeBatteryV = 7.0;
+constexpr std::uint32_t kBootPacketCount = 3;
+constexpr double kMillivoltsPerVolt = 1000.0;
+constexpr double kCentiUnitsPerUnit = 100.0;
+constexpr double kNominalBusCurrentMa = 420.0;
+constexpr double kBusCurrentOscillationMa = 35.0;
+constexpr double kRollAmplitudeCentiDeg = 450.0;
+constexpr double kPitchAmplitudeCentiDeg = 320.0;
+constexpr double kYawStepCentiDeg = 725.0;
+constexpr double kHalfTurnCentiDeg = 18000.0;
+constexpr double kFullTurnCentiDeg = 36000.0;
+
 void handle_signal(int) {
     g_running.store(false);
 }
@@ -144,20 +166,23 @@ std::uint64_t now_ms() {
 }
 
 orbitops::Telemetry make_telemetry(std::uint32_t sequence, const Options& options) {
-    const double phase = static_cast<double>(sequence) / 8.0;
-    double temperature = 24.0 + 1.8 * std::sin(phase);
-    double battery = 8.1 - 0.0025 * static_cast<double>(sequence);
+    const double phase = static_cast<double>(sequence) / kScenarioPhaseDivisor;
+    double temperature =
+        kNominalTemperatureC + kTemperatureOscillationC * std::sin(phase);
+    double battery =
+        kNominalBatteryV -
+        kNominalBatteryDrainPerPacketV * static_cast<double>(sequence);
 
     if (options.scenario == "thermal") {
-        temperature += 0.72 * static_cast<double>(sequence);
+        temperature += kThermalRisePerPacketC * static_cast<double>(sequence);
     } else if (options.scenario == "power") {
-        battery -= 0.035 * static_cast<double>(sequence);
+        battery -= kPowerDrainPerPacketV * static_cast<double>(sequence);
     }
 
     orbitops::SpacecraftMode mode = orbitops::SpacecraftMode::Nominal;
-    if (temperature >= 60.0 || battery <= 7.0) {
+    if (temperature >= kSafeTemperatureC || battery <= kSafeBatteryV) {
         mode = orbitops::SpacecraftMode::Safe;
-    } else if (sequence < 3) {
+    } else if (sequence < kBootPacketCount) {
         mode = orbitops::SpacecraftMode::Boot;
     }
 
@@ -166,14 +191,20 @@ orbitops::Telemetry make_telemetry(std::uint32_t sequence, const Options& option
     telemetry.timestamp_ms = now_ms();
     telemetry.mode = mode;
     telemetry.battery_mv = static_cast<std::uint16_t>(
-        std::round(std::max(0.0, battery) * 1000.0));
-    telemetry.bus_current_ma = static_cast<std::uint16_t>(
-        std::round(420.0 + 35.0 * std::sin(phase * 0.7)));
-    telemetry.temperature_centi_c = static_cast<std::int16_t>(std::round(temperature * 100.0));
-    telemetry.roll_centi_deg = static_cast<std::int16_t>(std::round(450.0 * std::sin(phase * 0.5)));
-    telemetry.pitch_centi_deg = static_cast<std::int16_t>(std::round(320.0 * std::cos(phase * 0.4)));
+        std::round(std::max(0.0, battery) * kMillivoltsPerVolt));
+    telemetry.bus_current_ma = static_cast<std::uint16_t>(std::round(
+        kNominalBusCurrentMa + kBusCurrentOscillationMa * std::sin(phase * 0.7)));
+    telemetry.temperature_centi_c = static_cast<std::int16_t>(
+        std::round(temperature * kCentiUnitsPerUnit));
+    telemetry.roll_centi_deg = static_cast<std::int16_t>(
+        std::round(kRollAmplitudeCentiDeg * std::sin(phase * 0.5)));
+    telemetry.pitch_centi_deg = static_cast<std::int16_t>(
+        std::round(kPitchAmplitudeCentiDeg * std::cos(phase * 0.4)));
     telemetry.yaw_centi_deg = static_cast<std::int16_t>(
-        std::fmod(static_cast<double>(sequence) * 725.0 + 18000.0, 36000.0) - 18000.0);
+        std::fmod(
+            static_cast<double>(sequence) * kYawStepCentiDeg + kHalfTurnCentiDeg,
+            kFullTurnCentiDeg) -
+        kHalfTurnCentiDeg);
     return telemetry;
 }
 

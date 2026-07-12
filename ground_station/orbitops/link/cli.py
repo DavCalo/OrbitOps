@@ -121,6 +121,13 @@ def configure_link_parser(parser: argparse.ArgumentParser) -> None:
 def _resolved_link_configuration(
     args: argparse.Namespace,
 ) -> tuple[LinkConfig, MissionProfile | None]:
+    """Apply defaults -> profile -> explicit CLI precedence.
+
+    ``argparse`` leaves omitted impairment options as ``None``. That sentinel is
+    deliberately distinct from an explicit zero, allowing an operator to disable
+    a non-zero profile field.
+    """
+
     profile_reference: str | None = args.profile
     profile = None if profile_reference is None else resolve_mission_profile(profile_reference)
     base = LinkConfig() if profile is None else profile.link_config
@@ -152,6 +159,8 @@ def _run_metadata(
     profile: MissionProfile | None,
     profile_reference: str | None,
 ) -> LinkRunMetadata:
+    """Describe the selected profile and fingerprint the post-override config."""
+
     if profile is None:
         return LinkRunMetadata(configuration_fingerprint(config))
     if profile_reference is None:
@@ -180,6 +189,8 @@ def run_link_command(args: argparse.Namespace) -> int:
     """Resolve configuration, run the proxy, and report final statistics."""
 
     try:
+        # Resolve and validate before creating files or sockets so invalid profiles
+        # remain side-effect free.
         config, profile = _resolved_link_configuration(args)
         metadata = _run_metadata(config, profile, args.profile)
         session_id = args.session_id or uuid.uuid4().hex

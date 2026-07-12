@@ -52,7 +52,12 @@ def _temporary_stop_handlers(stop_event: threading.Event) -> Iterator[None]:
 
 
 class LinkRuntime:
-    """Forward UDP datagrams through deterministic impairments and scheduling."""
+    """Forward UDP datagrams through deterministic impairments and scheduling.
+
+    ``open`` binds sockets and resets deterministic state. ``run`` owns the event
+    stream and loop lifetime. ``close`` is idempotent so callers may use it in
+    defensive cleanup paths.
+    """
 
     __slots__ = (
         "_clock",
@@ -93,6 +98,8 @@ class LinkRuntime:
         if run_metadata is not None and not isinstance(run_metadata, LinkRunMetadata):
             raise TypeError("run_metadata must be a LinkRunMetadata instance or None")
 
+        # Bind observability evidence to the effective configuration. A caller may
+        # supply profile identity, but cannot attach a misleading fingerprint.
         expected_fingerprint = configuration_fingerprint(config)
         if run_metadata is None:
             run_metadata = LinkRunMetadata(expected_fingerprint)
@@ -151,6 +158,8 @@ class LinkRuntime:
             output_socket.close()
             raise
 
+        # Reopening restarts PRNG, packet indices, scheduling, and event ordering
+        # from the same deterministic initial state.
         self.engine = ImpairmentEngine(self._config)
         self._scheduler = DatagramScheduler()
         self._event_stream = None
@@ -301,6 +310,7 @@ class LinkRuntime:
         start_ns = self._clock()
         session_id = self._session_id or uuid.uuid4().hex
         self._event_stream = LinkEventStream(session_id, start_ns, self._event_sink)
+        # Schema 2 uses event index zero as a stream header, including empty runs.
         self._event_stream.emit_run_metadata(self._run_metadata, start_ns)
         if ready_event is not None:
             ready_event.set()
@@ -337,10 +347,14 @@ class LinkRuntime:
                     self._scheduler.enqueue(outcome, received_at_ns)
                     received_packets += 1
                     if max_packets is not None and received_packets >= max_packets:
+                        # Tail holds may wait for packets that a finite run will
+                        # never receive, so release them before draining.
                         self._scheduler.release_holds()
                         draining = True
         finally:
             try:
+                # Preserve a complete account of the observed run on cooperative
+                # and exceptional exits whenever the event sink remains writable.
                 if self._event_stream is not None:
                     self._event_stream.emit_summary(self._clock())
             finally:
