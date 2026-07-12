@@ -5,13 +5,13 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "orbitops-ground-station"
 dynamic = ["version"]
-description = "Dependency-light CubeSat telemetry ground-station simulator"
+description = "Dependency-light CubeSat telemetry and deterministic link-emulation platform"
 readme = "README.md"
 requires-python = ">=3.11"
 license = "MIT"
 license-files = ["LICENSE"]
 authors = [{ name = "Davide Calò" }]
-keywords = ["cubesat", "telemetry", "ground-station", "udp", "simulation"]
+keywords = ["cubesat", "telemetry", "ground-station", "link-emulator", "udp", "simulation"]
 classifiers = [
   "Development Status :: 3 - Alpha",
   "Environment :: Console",

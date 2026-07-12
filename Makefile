@@ -1,4 +1,4 @@
-.PHONY: bootstrap build clean configure integration package python-tests quality test verify
+.PHONY: bootstrap build clean configure integration link-demo package python-tests quality test verify
 
 PYTHON ?= python3
 CMAKE ?= cmake
@@ -26,6 +26,10 @@ test: build python-tests
 integration: build
 	$(PYTHON) scripts/integration_check.py ./$(BUILD_DIR)/orbitops_sim
 	$(PYTHON) scripts/link_integration_check.py ./$(BUILD_DIR)/orbitops_sim
+	$(PYTHON) scripts/link_demo_check.py ./$(BUILD_DIR)/orbitops_sim
+
+link-demo: build
+	$(PYTHON) scripts/link_demo_check.py ./$(BUILD_DIR)/orbitops_sim
 
 quality:
 	$(PYTHON) -m ruff check .
