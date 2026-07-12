@@ -1,0 +1,12 @@
+schema_version = 1
+name = "degraded-link"
+description = "Deterministic impaired-link fixture for profile-core tests."
+
+[link]
+seed = 42
+loss_rate = 0.05
+duplicate_rate = 0.02
+corrupt_rate = 0.01
+latency_ms = 120
+jitter_ms = 30
+reorder_window = 3

@@ -1,0 +1,5 @@
+schema_version = 1
+name = "invalid-profile"
+operator = "not-part-of-schema"
+
+[link]
