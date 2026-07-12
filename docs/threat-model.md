@@ -2,82 +2,92 @@
 
 ## Purpose
 
-OrbitOps is a local telemetry simulator, not flight software or a secure communications product. This document makes current trust assumptions explicit so the project is not deployed beyond its intended boundary.
+OrbitOps is a local telemetry and deterministic-fault simulator. It is not flight software, a secure communications product, an RF propagation model, or a safety-certified system.
 
 ## Assets
 
 - integrity of decoded telemetry;
-- integrity of telemetry recordings and link-event logs;
+- integrity of mission-profile files, telemetry recordings, and link-event logs;
 - availability of the simulator, link emulator, and ground station;
-- correctness and reproducibility of protocol, impairment, scheduling, and alarm behavior;
-- source-code and CI supply-chain integrity.
+- reproducibility of configuration resolution, fingerprinting, impairment, scheduling, and alarms;
+- source-code, package-resource, and CI supply-chain integrity.
 
 ## Trust boundaries
 
 ```text
-On-board simulator -> UDP -> link emulator -> UDP -> ground station
-                              |                    |
-                              v                    v
-                         link-event JSONL     telemetry JSONL
+mission profile -> resolver
+                     |
+simulator -> UDP -> link emulator -> UDP -> ground station
+                     |                    |
+                     v                    v
+             link-event JSONL      telemetry JSONL
 ```
 
-Both UDP boundaries are untrusted. Imported telemetry recordings and link-event logs are also untrusted input. The link emulator is an explicit fault-injection component, not a security gateway.
+Both UDP boundaries are untrusted. External mission profiles and imported JSONL files are untrusted input. The link emulator is a fault-injection component, not a security gateway.
 
 ## Current controls
 
-- exact packet-length validation;
-- protocol magic and version checks;
-- reserved-flags validation;
-- CRC-32 accidental-corruption detection;
-- bounded fixed-width decoding;
-- rejection of invalid spacecraft modes;
-- pre-socket validation of link ports, rates, seeds, timing values, and reorder windows;
-- deterministic and bounded impairment decisions;
-- monotonic scheduler inputs and stable delivery ordering;
-- versioned telemetry and link-event JSONL formats;
-- strict link-event structure, ordering, and summary validation;
+- strict TOML parsing with unknown-key and schema-version rejection;
+- package-resource allowlist for built-in profiles;
+- no remote profile downloads, interpolation, executable hooks, or credentials;
+- pre-socket and pre-log profile/configuration validation;
+- canonical effective-configuration encoding and deterministic SHA-256 fingerprints;
+- exact packet-length, magic, version, flags, mode, and CRC validation;
+- bounded fixed-width decoding and bounded impairment values;
+- deterministic SplitMix64 decisions and monotonic scheduling;
+- link-event schema-version, ordering, metadata, and summary validation;
+- legacy schema-version-1 event reading;
 - no raw datagram payloads in link-event logs;
-- read-only default GitHub Actions permissions;
-- pinned GitHub Actions revisions;
-- CI tests, type checks, compiler warnings, and sanitizers.
+- read-only default GitHub Actions permissions and pinned Action revisions;
+- CI tests, strict typing, coverage, compiler warnings, sanitizers, package tests, and installed-CLI demos.
 
 ## Known limitations
 
-- UDP traffic is not authenticated or encrypted;
-- CRC-32 detects accidental corruption but is not a cryptographic integrity mechanism;
+- UDP traffic is unauthenticated and unencrypted;
+- CRC-32 is not a cryptographic integrity mechanism;
+- configuration fingerprints are not signatures, MACs, or provenance proofs;
+- plaintext profiles and logs can be modified by anyone with file access;
 - senders are not authorized or rate-limited;
-- the receiver and link emulator have no application-level replay protection;
-- telemetry recordings and event logs are plaintext;
-- event metadata can still reveal packet timing, sizes, session identifiers, and impairment behavior;
-- operator-provided session identifiers may accidentally contain sensitive information;
-- the simulator uses host wall-clock time;
+- replay protection is not implemented;
+- event metadata reveals timing, sizes, session identifiers, impairment behavior, and profile identity;
+- external `profile_reference` values may reveal local paths;
+- operator-provided names and session identifiers may contain sensitive information;
 - denial-of-service resilience is not a project goal;
-- event logs are flushed per event for inspectability, not optimized for hostile high-rate traffic;
-- forced process termination can leave a partial log without a final summary.
+- forced termination can leave partial logs.
 
 ## Abuse cases
 
+### Malicious or malformed profile
+
+An attacker can provide invalid TOML, unsupported schema versions, extreme values, ambiguous references, or unexpected keys. OrbitOps rejects these before creating an event log or opening a socket.
+
+A valid profile can still request disruptive but bounded behavior such as complete packet loss or high latency. Profiles express simulation behavior; they are not authorization policy.
+
+### Misleading run evidence
+
+A user can edit a profile or JSONL log and recompute a matching fingerprint. Fingerprints identify effective configuration equivalence but do not prove who created a run or whether a log is original.
+
+### Metadata disclosure
+
+A profile path or session identifier can reveal usernames, directories, project names, or operational conventions. Do not include secrets or sensitive customer/mission identifiers.
+
 ### Datagram injection
 
-An untrusted process can send malformed or fabricated UDP datagrams to either listener. Protocol validation protects the ground decoder from malformed packets but does not authenticate the sender.
+An untrusted process can send malformed or fabricated UDP datagrams. Protocol checks protect parser correctness but do not authenticate the sender.
 
 ### Resource exhaustion
 
-A sender can generate high packet rates, large UDP datagrams, or long-running sessions. OrbitOps bounds individual datagram size and impairment values but does not implement global rate limits, quotas, or storage retention.
-
-### Misleading fault evidence
-
-A user can alter a JSONL log after creation. Structural and summary validation detects internal inconsistency but does not provide provenance or cryptographic authenticity.
+A sender can generate high packet rates or long-running sessions. OrbitOps bounds individual datagrams and configuration values but does not enforce global quotas, rate limits, or retention.
 
 ### Unsafe network exposure
 
-Binding to a non-loopback address expands the trust boundary. The project does not add transport encryption, identity, or authorization merely because a host argument permits broader binding.
+Binding beyond loopback expands the trust boundary without adding encryption, authorization, or sender identity.
 
 ## Safe deployment boundary
 
-Use loopback addresses or a trusted isolated development network. Do not transmit secrets, personal data, proprietary telemetry, or safety-critical commands. Do not expose either UDP listener directly to the public internet.
+Use loopback addresses or a trusted isolated development network. Do not transmit secrets, personal data, proprietary flight telemetry, or safety-critical commands. Do not expose either UDP listener directly to the public internet.
 
-Store event and telemetry files with operating-system permissions appropriate to their metadata. Use non-sensitive session identifiers and define a retention policy for generated captures.
+Review external profile files before use. Store profiles and logs with appropriate operating-system permissions, use non-sensitive identifiers, and define a retention policy.
 
 ## Future security work
 
@@ -85,6 +95,6 @@ Store event and telemetry files with operating-system permissions appropriate to
 - optional transport encryption;
 - sender allowlists and rate limiting;
 - replay-window enforcement;
-- fuzzing of packet, CLI, telemetry-recording, and link-event parsers;
-- signed event manifests or provenance where justified;
+- fuzzing of profile, packet, CLI, telemetry, and link-event parsers;
+- signed run manifests or attestations where provenance is required;
 - signed release artifacts and build provenance.

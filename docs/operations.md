@@ -7,158 +7,171 @@
 - CMake 3.20 or newer;
 - Linux or macOS. Windows users should use WSL for the simulator.
 
-## Install the CLI
+OrbitOps is non-flight development software. Run it on loopback or a trusted isolated network.
+
+## Install and build
 
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
-python -m pip install -e .
-orbitops --version
-```
+python -m pip install -e ".[dev]"
 
-## Build the simulator
-
-```bash
-cmake -S onboard -B build \
-  -DCMAKE_BUILD_TYPE=Release \
-  -DORBITOPS_WARNINGS_AS_ERRORS=ON
+cmake -S onboard -B build   -DCMAKE_BUILD_TYPE=Release   -DORBITOPS_WARNINGS_AS_ERRORS=ON
 cmake --build build
-./build/orbitops_sim --version
 ```
 
-## Automated link demo
+## One-command mission-profile demo
 
 ```bash
-make link-demo
+make profile-demo
 ```
 
-The target launches the public `orbitops link` command, sends four C++ telemetry packets through deterministic latency, duplication, and bounded reordering, decodes all forwarded packets, and validates the JSONL run summary.
+This target:
 
-## Run an impaired session
+1. invokes the installed `orbitops` executable;
+2. selects the bundled `intermittent-loss` profile;
+3. sends 16 C++ telemetry packets;
+4. decodes every forwarded packet;
+5. validates the deterministic drop count;
+6. validates schema-version-2 run metadata;
+7. verifies the effective configuration fingerprint and final summary.
 
-Use three terminals.
+The explicit-option v0.2 workflow remains available through `make link-demo`.
 
-### Terminal 1: ground station
+## Profile commands
 
 ```bash
-orbitops listen \
-  --host 127.0.0.1 \
-  --port 9000 \
-  --record sessions/telemetry.jsonl
+orbitops profile list
+orbitops profile show degraded-link
+orbitops profile validate file:profiles/lab-pass.toml
 ```
 
-### Terminal 2: link emulator
+Built-in names are stable. `show` and `validate` emit compact sorted-key JSON for scripting.
+
+Reference forms:
+
+- `nominal`: short built-in name, unless an identically named local file exists;
+- `builtin:nominal`: explicit built-in;
+- `scenario.toml`: existing external file;
+- `file:scenario.toml`: explicit external file.
+
+Ambiguous short references are rejected.
+
+## Run a profile-driven session
+
+Terminal 1:
 
 ```bash
-orbitops link \
-  --listen-host 127.0.0.1 \
-  --listen-port 9001 \
-  --forward-host 127.0.0.1 \
-  --forward-port 9000 \
-  --seed 42 \
-  --loss-rate 0.05 \
-  --latency-ms 120 \
-  --jitter-ms 30 \
-  --duplicate-rate 0.02 \
-  --corrupt-rate 0.01 \
-  --reorder-window 3 \
-  --event-log sessions/link-events.jsonl \
-  --session-id local-demo
+orbitops listen   --host 127.0.0.1   --port 9000   --record sessions/telemetry.jsonl
 ```
 
-### Terminal 3: simulator
+Terminal 2:
 
 ```bash
-./build/orbitops_sim \
-  --host 127.0.0.1 \
-  --port 9001 \
-  --interval-ms 500 \
-  --packets 80 \
-  --scenario thermal
+orbitops link   --profile degraded-link   --listen-host 127.0.0.1   --listen-port 9001   --forward-host 127.0.0.1   --forward-port 9000   --event-log sessions/link-events.jsonl   --session-id local-profile-pass
 ```
 
-The simulator must target the link emulator's listen port, not the ground-station port.
+Terminal 3:
 
-## Link command semantics
+```bash
+./build/orbitops_sim   --host 127.0.0.1   --port 9001   --interval-ms 500   --packets 80   --scenario thermal
+```
+
+The simulator targets the link listener, not the ground-station port.
+
+## Configuration precedence
 
 ```text
-orbitops link [endpoint options] [impairment options] [observability options]
+OrbitOps defaults -> selected profile -> explicit CLI options
 ```
 
-Endpoint defaults:
+For example, this keeps the profile seed and timing values but disables loss:
 
-- listen: `127.0.0.1:9001`;
-- forward: `127.0.0.1:9000`.
+```bash
+orbitops link --profile degraded-link --loss-rate 0
+```
 
-Impairment defaults are pass-through: seed `0`, all rates and delays `0`, and reorder window `0`.
-
-Rates must be finite numbers from `0.0` to `1.0`. Timing and reorder values must be non-negative integers. Ports, seeds, and reorder windows are range-checked before sockets are opened.
-
-`--max-packets N` makes the command finite. After receiving `N` input datagrams, OrbitOps releases held tail packets, drains scheduled deliveries, writes the final summary, and exits.
+Invalid profiles and invalid CLI values fail before event-log creation, runtime construction, or socket binding.
 
 ## Event logs
 
-`--event-log PATH` creates or replaces a canonical JSONL file. Every line is independently parseable. Complete runs end with `run_summary`; interrupted or failed runs may contain a valid partial stream without a summary.
+`--event-log PATH` creates or replaces canonical JSONL. New logs use schema version `2` and begin with `run_metadata`.
 
-Event logs contain metadata rather than packet payloads. Ground-station session recordings and link-event logs serve different purposes and should use different files.
-
-Validate a complete event log from Python:
+Inspect a complete log:
 
 ```bash
 python - <<'PY'
 from pathlib import Path
-from orbitops.link import load_link_events, validate_run_summary
+from orbitops.link import (
+    load_link_events,
+    run_metadata_from_events,
+    validate_run_summary,
+)
 
-statistics = validate_run_summary(load_link_events(Path("sessions/link-events.jsonl")))
-print(statistics)
+events = load_link_events(Path("sessions/link-events.jsonl"))
+print(run_metadata_from_events(events))
+print(validate_run_summary(events))
 PY
 ```
 
-## Replay telemetry
+The run metadata identifies:
 
-```bash
-orbitops replay sessions/telemetry.jsonl --speed 4
-```
+- the effective configuration fingerprint;
+- selected profile name;
+- original profile reference;
+- profile schema version.
 
-Starting a new recording or link event log at the same path replaces the previous file. Copy important captures before reusing a filename.
+No-profile runs still contain a fingerprint, with profile fields set to `null`. Legacy schema-version-1 logs remain readable and return no run metadata.
+
+A configuration fingerprint is not an authentication or provenance mechanism. Anyone able to modify the file can replace both data and fingerprint.
+
+## Metadata handling
+
+- Do not place secrets in session identifiers, profile names, or profile paths.
+- External profile references may expose local directory names in logs.
+- Store telemetry and link-event logs separately.
+- Apply operating-system permissions and retention appropriate to the metadata.
+- Copy important captures before reusing a path.
+
+## Finite and interrupted runs
+
+`--max-packets N` releases held tail packets, drains scheduled deliveries, writes `run_summary`, and exits.
+
+`SIGINT` and `SIGTERM` request cooperative shutdown. Forced termination or storage failure may leave a structurally valid partial log without a summary.
 
 ## Exit behavior
 
-- `0`: successful command or operator-requested stop;
-- `1`: runtime or validated operational failure raised as `SystemExit`;
-- `2`: standard command-line parsing failure.
-
-The link runtime translates `SIGINT` and `SIGTERM` into a cooperative stop request, emits a summary for the observed portion of the run, and closes both sockets. Invalid CLI configuration is rejected before bind.
-
-Ground-station packet validation failures are reported without terminating the UDP listener. Invalid replay files terminate replay with an actionable message.
+- `0`: successful command or cooperative operator stop;
+- `1`: validated operational failure;
+- `2`: command-line parsing failure.
 
 ## Troubleshooting
 
-### `Address already in use`
+### Installed CLI not found
 
-Another process is bound to the selected UDP port. Choose another port or stop the conflicting process. Check both the ground station (`9000` by default) and link listener (`9001` by default).
+Activate the intended virtual environment and run:
 
-### Link is ready but no telemetry appears
+```bash
+python -m pip install -e .
+command -v orbitops
+```
 
-Confirm the full route:
+### Profile not found or ambiguous
 
-1. simulator sends to the link listen host and port;
-2. link forwards to the ground-station host and port;
-3. ground station is already running;
-4. local firewall rules permit loopback UDP.
+List built-ins with `orbitops profile list`. Use `builtin:<name>` or `file:<path>` to select a namespace explicitly.
 
-### `CRC mismatch`
+### Fingerprint differs from an earlier run
 
-The packet was modified or corrupted. This is expected when `--corrupt-rate` selects a packet. CRC-32 detects the change; it does not repair or authenticate the datagram.
+Compare the effective values, not TOML formatting. Explicit CLI overrides change the fingerprint. Profile descriptions and names do not.
 
-### Event log has no `run_summary`
+### Event log has no summary
 
-The process was interrupted before its normal shutdown path completed, the storage write failed, or the process was forcibly killed. The partial log remains inspectable, but `validate_run_summary` correctly rejects it as incomplete.
+The process was interrupted before normal completion, forcibly killed, or failed to write storage. The partial log remains inspectable, but summary validation correctly rejects it.
 
-### Fewer forwarded packets than received packets
+### Address already in use
 
-Check the configured loss rate and final statistics. One duplicated packet creates two deliveries; one dropped packet creates none. Held packets are drained automatically only for finite `--max-packets` runs or normal cooperative shutdown.
+Choose another listen or forward port, or stop the conflicting process.
 
-### Build cannot find C++ standard headers
+### CRC mismatch
 
-Verify the compiler independently with a minimal C++17 program. On macOS, ensure a complete Xcode Command Line Tools installation is selected with `xcode-select`.
+A packet was modified or corrupted. CRC-32 detects accidental changes; it does not authenticate or repair the datagram.

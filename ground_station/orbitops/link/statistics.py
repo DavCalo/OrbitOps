@@ -5,7 +5,13 @@ from __future__ import annotations
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 
-from .events import EventAttributes, EventSink, LinkEvent, LinkEventType
+from .events import (
+    EventAttributes,
+    EventSink,
+    LinkEvent,
+    LinkEventType,
+    LinkRunMetadata,
+)
 
 _COUNTER_NAMES = (
     "packets_received",
@@ -21,7 +27,7 @@ _COUNTER_NAMES = (
 
 @dataclass(frozen=True, slots=True)
 class LinkStatistics:
-    """Counters derived exclusively from emitted non-summary events."""
+    """Counters derived exclusively from emitted packet and delivery events."""
 
     packets_received: int = 0
     packets_dropped: int = 0
@@ -83,7 +89,7 @@ _EVENT_COUNTERS: dict[LinkEventType, str] = {
 
 
 def statistics_from_events(events: Iterable[LinkEvent]) -> LinkStatistics:
-    """Derive counters from an event sequence, ignoring any summary event."""
+    """Derive counters from an event sequence, ignoring metadata and summary events."""
 
     counters = {name: 0 for name in _COUNTER_NAMES}
     for event in events:
@@ -91,6 +97,32 @@ def statistics_from_events(events: Iterable[LinkEvent]) -> LinkStatistics:
         if counter is not None:
             counters[counter] += 1
     return _statistics_from_values(counters)
+
+
+def _stream_metadata(sequence: tuple[LinkEvent, ...]) -> LinkRunMetadata | None:
+    if not sequence:
+        raise ValueError("event stream is empty")
+    schema_versions = {event.schema_version for event in sequence}
+    if len(schema_versions) != 1:
+        raise ValueError("event stream changed schema_version")
+    schema_version = next(iter(schema_versions))
+    metadata_events = [
+        event for event in sequence if event.event_type is LinkEventType.RUN_METADATA
+    ]
+
+    if schema_version == 1:
+        if metadata_events:
+            raise ValueError("schema version 1 streams may not contain run_metadata")
+        return None
+    if len(metadata_events) != 1 or sequence[0] is not metadata_events[0]:
+        raise ValueError("schema version 2 streams require one leading run_metadata event")
+    return LinkRunMetadata.from_attributes(metadata_events[0].attributes)
+
+
+def run_metadata_from_events(events: Iterable[LinkEvent]) -> LinkRunMetadata | None:
+    """Return versioned run metadata, or ``None`` for a legacy schema-1 stream."""
+
+    return _stream_metadata(tuple(events))
 
 
 def validate_run_summary(events: Iterable[LinkEvent]) -> LinkStatistics:
@@ -101,6 +133,7 @@ def validate_run_summary(events: Iterable[LinkEvent]) -> LinkStatistics:
         raise ValueError("complete event stream must end with run_summary")
     if any(event.event_type is LinkEventType.RUN_SUMMARY for event in sequence[:-1]):
         raise ValueError("run_summary may appear only once")
+    _stream_metadata(sequence)
 
     calculated = statistics_from_events(sequence[:-1])
     recorded = LinkStatistics.from_mapping(sequence[-1].attributes)
@@ -141,7 +174,7 @@ class LinkEventStream:
     def statistics(self) -> LinkStatistics:
         return self._statistics
 
-    def emit(
+    def _emit(
         self,
         event_type: LinkEventType,
         now_ns: int,
@@ -149,10 +182,6 @@ class LinkEventStream:
         packet_index: int | None = None,
         attributes: EventAttributes | None = None,
     ) -> LinkEvent:
-        if self._closed:
-            raise RuntimeError("event stream is closed")
-        if event_type is LinkEventType.RUN_SUMMARY:
-            raise ValueError("use emit_summary to close an event stream")
         if isinstance(now_ns, bool) or not isinstance(now_ns, int):
             raise TypeError("now_ns must be an integer")
         elapsed_ns = now_ns - self._start_ns
@@ -179,25 +208,53 @@ class LinkEventStream:
         self._last_elapsed_ns = elapsed_ns
         return event
 
+    def emit_run_metadata(self, metadata: LinkRunMetadata, now_ns: int) -> LinkEvent:
+        """Emit the required leading run metadata record."""
+
+        if self._closed:
+            raise RuntimeError("event stream is closed")
+        if self._event_index != 0:
+            raise RuntimeError("run_metadata must be the first event")
+        if not isinstance(metadata, LinkRunMetadata):
+            raise TypeError("metadata must be a LinkRunMetadata instance")
+        return self._emit(
+            LinkEventType.RUN_METADATA,
+            now_ns,
+            attributes=metadata.to_attributes(),
+        )
+
+    def emit(
+        self,
+        event_type: LinkEventType,
+        now_ns: int,
+        *,
+        packet_index: int | None = None,
+        attributes: EventAttributes | None = None,
+    ) -> LinkEvent:
+        if self._closed:
+            raise RuntimeError("event stream is closed")
+        if self._event_index == 0:
+            raise RuntimeError("emit_run_metadata must be called before packet events")
+        if event_type is LinkEventType.RUN_METADATA:
+            raise ValueError("use emit_run_metadata for the first event")
+        if event_type is LinkEventType.RUN_SUMMARY:
+            raise ValueError("use emit_summary to close an event stream")
+        return self._emit(
+            event_type,
+            now_ns,
+            packet_index=packet_index,
+            attributes=attributes,
+        )
+
     def emit_summary(self, now_ns: int) -> LinkEvent:
         if self._closed:
             raise RuntimeError("event stream is closed")
-        if isinstance(now_ns, bool) or not isinstance(now_ns, int):
-            raise TypeError("now_ns must be an integer")
-        elapsed_ns = now_ns - self._start_ns
-        if elapsed_ns < self._last_elapsed_ns:
-            raise ValueError("event clock moved backwards")
-
-        event = LinkEvent(
-            session_id=self._session_id,
-            event_index=self._event_index,
-            elapsed_ns=elapsed_ns,
-            event_type=LinkEventType.RUN_SUMMARY,
+        if self._event_index == 0:
+            raise RuntimeError("emit_run_metadata must be called before run_summary")
+        event = self._emit(
+            LinkEventType.RUN_SUMMARY,
+            now_ns,
             attributes=self._statistics.to_dict(),
         )
-        if self._sink is not None:
-            self._sink(event)
-        self._event_index += 1
-        self._last_elapsed_ns = elapsed_ns
         self._closed = True
         return event
