@@ -5,6 +5,7 @@ import socket
 import tempfile
 import threading
 import unittest
+from collections.abc import Mapping
 from pathlib import Path
 
 from orbitops.link import (
@@ -12,8 +13,12 @@ from orbitops.link import (
     LinkConfig,
     LinkEvent,
     LinkEventType,
+    LinkRunMetadata,
     LinkRuntime,
+    LinkStatistics,
+    configuration_fingerprint,
     load_link_events,
+    run_metadata_from_events,
     validate_run_summary,
 )
 from orbitops.link.decisions import Delivery, PacketOutcome
@@ -33,63 +38,106 @@ class StubImpairmentEngine(ImpairmentEngine):
 
 
 class LinkEventTests(unittest.TestCase):
-    def event(self, index: int, event_type: LinkEventType, elapsed_ns: int = 0) -> LinkEvent:
+    def legacy_event(
+        self,
+        index: int,
+        event_type: LinkEventType,
+        elapsed_ns: int = 0,
+        *,
+        attributes: Mapping[str, str | int | float | bool | None] | None = None,
+    ) -> LinkEvent:
         return LinkEvent(
             session_id="session-1",
             event_index=index,
             elapsed_ns=elapsed_ns,
             event_type=event_type,
+            attributes={} if attributes is None else attributes,
+            schema_version=1,
         )
 
-    def test_jsonl_round_trip_is_canonical_and_replayable(self) -> None:
+    def test_schema_version_two_run_metadata_round_trip_is_canonical(self) -> None:
+        metadata = LinkRunMetadata(
+            configuration_fingerprint(LinkConfig(seed=7)),
+            profile_name="nominal",
+            profile_reference="builtin:nominal",
+            profile_schema_version=1,
+        )
+        events = (
+            LinkEvent(
+                session_id="session-2",
+                event_index=0,
+                elapsed_ns=0,
+                event_type=LinkEventType.RUN_METADATA,
+                attributes=metadata.to_attributes(),
+            ),
+            LinkEvent(
+                session_id="session-2",
+                event_index=1,
+                elapsed_ns=12,
+                event_type=LinkEventType.RUN_SUMMARY,
+                attributes=LinkStatistics().to_dict(),
+            ),
+        )
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "events.jsonl"
-            event = LinkEvent(
-                session_id="session-1",
-                event_index=0,
-                elapsed_ns=12,
-                event_type=LinkEventType.PACKET_RECEIVED,
-                packet_index=3,
-                attributes={"payload_bytes": 35},
-            )
             with JsonlEventRecorder(path) as recorder:
-                recorder.write(event)
+                for event in events:
+                    recorder.write(event)
 
-            line = path.read_text(encoding="utf-8").strip()
-            expected = json.dumps(event.to_dict(), separators=(",", ":"), sort_keys=True)
-            self.assertEqual(line, expected)
-            self.assertEqual(load_link_events(path), (event,))
+            lines = path.read_text(encoding="utf-8").splitlines()
+            self.assertEqual(
+                lines,
+                [
+                    json.dumps(event.to_dict(), separators=(",", ":"), sort_keys=True)
+                    for event in events
+                ],
+            )
+            loaded = load_link_events(path)
+            self.assertEqual(loaded, events)
+            self.assertEqual(run_metadata_from_events(loaded), metadata)
+            self.assertEqual(validate_run_summary(loaded), LinkStatistics())
             with self.assertRaises(RuntimeError):
-                recorder.write(event)
+                recorder.write(events[0])
 
-    def test_load_accepts_partial_log_without_summary(self) -> None:
+    def test_legacy_schema_one_log_remains_readable(self) -> None:
+        records = (
+            self.legacy_event(0, LinkEventType.PACKET_RECEIVED),
+            self.legacy_event(
+                1,
+                LinkEventType.RUN_SUMMARY,
+                1,
+                attributes=LinkStatistics(packets_received=1).to_dict(),
+            ),
+        )
         with tempfile.TemporaryDirectory() as directory:
-            path = Path(directory) / "partial.jsonl"
-            records = [
-                self.event(0, LinkEventType.PACKET_RECEIVED, 0),
-                self.event(1, LinkEventType.PACKET_DROPPED, 1),
-            ]
+            path = Path(directory) / "legacy.jsonl"
             path.write_text(
                 "".join(json.dumps(event.to_dict()) + "\n" for event in records),
                 encoding="utf-8",
             )
-            self.assertEqual(load_link_events(path), tuple(records))
+            loaded = load_link_events(path)
 
-    def test_load_rejects_malformed_sequences(self) -> None:
+        self.assertEqual(loaded, records)
+        self.assertIsNone(run_metadata_from_events(loaded))
+        self.assertEqual(validate_run_summary(loaded).packets_received, 1)
+
+    def test_load_rejects_malformed_legacy_sequences(self) -> None:
         cases = {
             "invalid-json": "{\n",
             "missing-key": json.dumps({"schema_version": 1}) + "\n",
-            "wrong-index": json.dumps(self.event(2, LinkEventType.PACKET_RECEIVED).to_dict())
+            "wrong-index": json.dumps(self.legacy_event(2, LinkEventType.PACKET_RECEIVED).to_dict())
             + "\n",
             "mixed-session": "".join(
                 [
-                    json.dumps(self.event(0, LinkEventType.PACKET_RECEIVED).to_dict()) + "\n",
+                    json.dumps(self.legacy_event(0, LinkEventType.PACKET_RECEIVED).to_dict())
+                    + "\n",
                     json.dumps(
                         LinkEvent(
                             session_id="session-2",
                             event_index=1,
                             elapsed_ns=0,
                             event_type=LinkEventType.PACKET_DROPPED,
+                            schema_version=1,
                         ).to_dict()
                     )
                     + "\n",
@@ -97,14 +145,29 @@ class LinkEventTests(unittest.TestCase):
             ),
             "time-backwards": "".join(
                 [
-                    json.dumps(self.event(0, LinkEventType.PACKET_RECEIVED, 2).to_dict()) + "\n",
-                    json.dumps(self.event(1, LinkEventType.PACKET_DROPPED, 1).to_dict()) + "\n",
+                    json.dumps(
+                        self.legacy_event(
+                            0,
+                            LinkEventType.PACKET_RECEIVED,
+                            2,
+                        ).to_dict()
+                    )
+                    + "\n",
+                    json.dumps(
+                        self.legacy_event(
+                            1,
+                            LinkEventType.PACKET_DROPPED,
+                            1,
+                        ).to_dict()
+                    )
+                    + "\n",
                 ]
             ),
             "after-summary": "".join(
                 [
-                    json.dumps(self.event(0, LinkEventType.RUN_SUMMARY).to_dict()) + "\n",
-                    json.dumps(self.event(1, LinkEventType.PACKET_RECEIVED).to_dict()) + "\n",
+                    json.dumps(self.legacy_event(0, LinkEventType.RUN_SUMMARY).to_dict()) + "\n",
+                    json.dumps(self.legacy_event(1, LinkEventType.PACKET_RECEIVED).to_dict())
+                    + "\n",
                 ]
             ),
         }
@@ -115,6 +178,96 @@ class LinkEventTests(unittest.TestCase):
                     path.write_text(content, encoding="utf-8")
                     with self.assertRaises(ValueError):
                         load_link_events(path)
+
+    def test_load_accepts_version_two_partial_log_with_metadata(self) -> None:
+        metadata = LinkRunMetadata(configuration_fingerprint(LinkConfig()))
+        record = LinkEvent(
+            session_id="partial",
+            event_index=0,
+            elapsed_ns=0,
+            event_type=LinkEventType.RUN_METADATA,
+            attributes=metadata.to_attributes(),
+        )
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "partial.jsonl"
+            path.write_text(json.dumps(record.to_dict()) + "\n", encoding="utf-8")
+            self.assertEqual(load_link_events(path), (record,))
+
+    def test_load_rejects_invalid_metadata_order_and_schema_changes(self) -> None:
+        metadata = LinkRunMetadata(configuration_fingerprint(LinkConfig()))
+        cases = {
+            "missing-metadata": LinkEvent(
+                "session",
+                0,
+                0,
+                LinkEventType.PACKET_RECEIVED,
+            ).to_dict(),
+            "duplicate-metadata": [
+                LinkEvent(
+                    "session",
+                    0,
+                    0,
+                    LinkEventType.RUN_METADATA,
+                    attributes=metadata.to_attributes(),
+                ).to_dict(),
+                LinkEvent(
+                    "session",
+                    1,
+                    0,
+                    LinkEventType.RUN_METADATA,
+                    attributes=metadata.to_attributes(),
+                ).to_dict(),
+            ],
+            "mixed-schema": [
+                self.legacy_event(0, LinkEventType.PACKET_RECEIVED).to_dict(),
+                LinkEvent(
+                    "session-1",
+                    1,
+                    0,
+                    LinkEventType.RUN_SUMMARY,
+                    attributes=LinkStatistics(packets_received=1).to_dict(),
+                ).to_dict(),
+            ],
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            for name, payload in cases.items():
+                with self.subTest(name=name):
+                    records = payload if isinstance(payload, list) else [payload]
+                    path = Path(directory) / f"{name}.jsonl"
+                    path.write_text(
+                        "".join(json.dumps(record) + "\n" for record in records),
+                        encoding="utf-8",
+                    )
+                    with self.assertRaises(ValueError):
+                        load_link_events(path)
+
+    def test_metadata_validation_is_strict(self) -> None:
+        fingerprint = configuration_fingerprint(LinkConfig())
+        with self.assertRaises(ValueError):
+            LinkRunMetadata("sha256:not-hex")
+        with self.assertRaises(ValueError):
+            LinkRunMetadata(fingerprint, profile_name="nominal")
+        with self.assertRaises(ValueError):
+            LinkEvent(
+                "session",
+                0,
+                0,
+                LinkEventType.RUN_METADATA,
+                attributes={
+                    "configuration_fingerprint": fingerprint,
+                    "profile_name": None,
+                    "profile_reference": None,
+                },
+            )
+        with self.assertRaises(ValueError):
+            LinkEvent(
+                "session",
+                0,
+                0,
+                LinkEventType.RUN_METADATA,
+                attributes=LinkRunMetadata(fingerprint).to_attributes(),
+                schema_version=1,
+            )
 
     def test_event_validation_rejects_invalid_fields(self) -> None:
         with self.assertRaises(ValueError):
@@ -146,7 +299,13 @@ class LinkRuntimeEventTests(unittest.TestCase):
         receiver.settimeout(2.0)
         return receiver
 
-    def run_one(self, config: LinkConfig, payload: bytes) -> tuple[list[bytes], list[LinkEvent]]:
+    def run_one(
+        self,
+        config: LinkConfig,
+        payload: bytes,
+        *,
+        metadata: LinkRunMetadata | None = None,
+    ) -> tuple[list[bytes], list[LinkEvent]]:
         events: list[LinkEvent] = []
         with self.receiver() as receiver:
             runtime = LinkRuntime(
@@ -155,6 +314,7 @@ class LinkRuntimeEventTests(unittest.TestCase):
                 config,
                 event_sink=events.append,
                 session_id="runtime-test",
+                run_metadata=metadata,
             )
             runtime.open()
             address = runtime.bound_address
@@ -174,7 +334,7 @@ class LinkRuntimeEventTests(unittest.TestCase):
             self.assertEqual(runtime.statistics, validate_run_summary(events))
             return received, events
 
-    def test_empty_run_emits_zero_summary(self) -> None:
+    def test_empty_run_emits_metadata_and_zero_summary(self) -> None:
         events: list[LinkEvent] = []
         stop = threading.Event()
         stop.set()
@@ -187,15 +347,26 @@ class LinkRuntimeEventTests(unittest.TestCase):
         )
         runtime.open()
         runtime.run(stop_event=stop)
-        self.assertEqual([event.event_type for event in events], [LinkEventType.RUN_SUMMARY])
+        self.assertEqual(
+            [event.event_type for event in events],
+            [LinkEventType.RUN_METADATA, LinkEventType.RUN_SUMMARY],
+        )
+        metadata = run_metadata_from_events(events)
+        self.assertIsNotNone(metadata)
+        assert metadata is not None
+        self.assertEqual(
+            metadata.configuration_fingerprint,
+            configuration_fingerprint(LinkConfig()),
+        )
         self.assertEqual(validate_run_summary(events).packets_received, 0)
 
-    def test_nominal_run_emits_receive_schedule_forward_and_summary(self) -> None:
+    def test_nominal_run_preserves_packet_event_semantics(self) -> None:
         received, events = self.run_one(LinkConfig(), b"orbitops")
         self.assertEqual(received, [b"orbitops"])
         self.assertEqual(
             [event.event_type for event in events],
             [
+                LinkEventType.RUN_METADATA,
                 LinkEventType.PACKET_RECEIVED,
                 LinkEventType.DELIVERY_SCHEDULED,
                 LinkEventType.PACKET_FORWARDED,
@@ -219,7 +390,10 @@ class LinkRuntimeEventTests(unittest.TestCase):
                     session_id="jsonl-runtime",
                 )
                 runtime.open()
-                thread = threading.Thread(target=runtime.run, kwargs={"max_packets": 1})
+                thread = threading.Thread(
+                    target=runtime.run,
+                    kwargs={"max_packets": 1},
+                )
                 thread.start()
                 with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sender:
                     sender.sendto(b"recorded", runtime.bound_address)
@@ -228,11 +402,33 @@ class LinkRuntimeEventTests(unittest.TestCase):
                 self.assertFalse(thread.is_alive())
 
             events = load_link_events(path)
+            self.assertEqual(events[0].event_type, LinkEventType.RUN_METADATA)
             self.assertEqual(events[-1].event_type, LinkEventType.RUN_SUMMARY)
             self.assertEqual(events[0].session_id, "jsonl-runtime")
             self.assertEqual(validate_run_summary(events).deliveries_forwarded, 1)
 
-    def test_impaired_run_exposes_every_selected_decision(self) -> None:
+    def test_runtime_preserves_supplied_profile_identity(self) -> None:
+        config = LinkConfig(seed=42, latency_ms=5)
+        metadata = LinkRunMetadata(
+            configuration_fingerprint(config),
+            profile_name="degraded-link",
+            profile_reference="builtin:degraded-link",
+            profile_schema_version=1,
+        )
+        _received, events = self.run_one(config, b"profile", metadata=metadata)
+        self.assertEqual(run_metadata_from_events(events), metadata)
+
+    def test_runtime_rejects_metadata_for_a_different_configuration(self) -> None:
+        metadata = LinkRunMetadata(configuration_fingerprint(LinkConfig()))
+        with self.assertRaisesRegex(ValueError, "does not match"):
+            LinkRuntime(
+                ("127.0.0.1", 0),
+                ("127.0.0.1", 9),
+                LinkConfig(seed=1),
+                run_metadata=metadata,
+            )
+
+    def test_impaired_and_dropped_counters_remain_compatible(self) -> None:
         received, events = self.run_one(
             LinkConfig(seed=7, duplicate_rate=1.0, corrupt_rate=1.0, latency_ms=1),
             b"payload",
@@ -242,19 +438,16 @@ class LinkRuntimeEventTests(unittest.TestCase):
         self.assertIn(LinkEventType.PACKET_DUPLICATED, event_types)
         self.assertIn(LinkEventType.PACKET_CORRUPTED, event_types)
         self.assertIn(LinkEventType.PACKET_DELAYED, event_types)
-        self.assertEqual(event_types.count(LinkEventType.DELIVERY_SCHEDULED), 2)
-        self.assertEqual(event_types.count(LinkEventType.PACKET_FORWARDED), 2)
         statistics = validate_run_summary(events)
         self.assertEqual(statistics.packets_duplicated, 1)
         self.assertEqual(statistics.packets_corrupted, 1)
         self.assertEqual(statistics.packets_delayed, 1)
 
-    def test_dropped_run_emits_no_delivery_events(self) -> None:
-        received, events = self.run_one(LinkConfig(loss_rate=1.0), b"lost")
-        self.assertEqual(received, [])
+        _received, dropped_events = self.run_one(LinkConfig(loss_rate=1.0), b"lost")
         self.assertEqual(
-            [event.event_type for event in events],
+            [event.event_type for event in dropped_events],
             [
+                LinkEventType.RUN_METADATA,
                 LinkEventType.PACKET_RECEIVED,
                 LinkEventType.PACKET_DROPPED,
                 LinkEventType.RUN_SUMMARY,

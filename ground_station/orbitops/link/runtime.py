@@ -15,7 +15,8 @@ from typing import Any
 
 from .config import LinkConfig
 from .decisions import PacketOutcome
-from .events import EventSink, LinkEventType
+from .events import EventSink, LinkEventType, LinkRunMetadata
+from .fingerprint import configuration_fingerprint
 from .impairments import ImpairmentEngine
 from .scheduler import DatagramScheduler, ScheduledDatagram
 from .statistics import LinkEventStream, LinkStatistics
@@ -51,12 +52,7 @@ def _temporary_stop_handlers(stop_event: threading.Event) -> Iterator[None]:
 
 
 class LinkRuntime:
-    """Forward UDP datagrams through deterministic impairments and scheduling.
-
-    ``open`` binds the receiving endpoint so callers can discover an ephemeral
-    port before starting the loop. ``run`` owns the loop lifetime and always
-    closes both sockets before returning or propagating an exception.
-    """
+    """Forward UDP datagrams through deterministic impairments and scheduling."""
 
     __slots__ = (
         "_clock",
@@ -70,6 +66,7 @@ class LinkRuntime:
         "_output_socket",
         "_poll_interval_s",
         "_reordered_packets",
+        "_run_metadata",
         "_scheduler",
         "_session_id",
         "engine",
@@ -85,6 +82,7 @@ class LinkRuntime:
         poll_interval_s: float = _DEFAULT_POLL_INTERVAL_S,
         event_sink: EventSink | None = None,
         session_id: str | None = None,
+        run_metadata: LinkRunMetadata | None = None,
     ) -> None:
         if isinstance(poll_interval_s, bool) or not math.isfinite(poll_interval_s):
             raise ValueError("poll_interval_s must be a finite positive number")
@@ -92,6 +90,17 @@ class LinkRuntime:
             raise ValueError("poll_interval_s must be between 0.0 and 1.0")
         if session_id is not None and (not isinstance(session_id, str) or not session_id.strip()):
             raise ValueError("session_id must be a non-empty string")
+        if run_metadata is not None and not isinstance(run_metadata, LinkRunMetadata):
+            raise TypeError("run_metadata must be a LinkRunMetadata instance or None")
+
+        expected_fingerprint = configuration_fingerprint(config)
+        if run_metadata is None:
+            run_metadata = LinkRunMetadata(expected_fingerprint)
+        elif run_metadata.configuration_fingerprint != expected_fingerprint:
+            raise ValueError(
+                "run_metadata configuration_fingerprint does not match the effective LinkConfig"
+            )
+
         self._listen_address = listen_address
         self._config = config
         self._forward_address = forward_address
@@ -99,6 +108,7 @@ class LinkRuntime:
         self._poll_interval_s = poll_interval_s
         self._event_sink = event_sink
         self._session_id = session_id
+        self._run_metadata = run_metadata
         self.engine = ImpairmentEngine(config)
         self._scheduler = DatagramScheduler()
         self._input_socket: socket.socket | None = None
@@ -291,6 +301,7 @@ class LinkRuntime:
         start_ns = self._clock()
         session_id = self._session_id or uuid.uuid4().hex
         self._event_stream = LinkEventStream(session_id, start_ns, self._event_sink)
+        self._event_stream.emit_run_metadata(self._run_metadata, start_ns)
         if ready_event is not None:
             ready_event.set()
 

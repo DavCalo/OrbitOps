@@ -1,19 +1,27 @@
 # OrbitOps link event schema
 
-OrbitOps records link-emulator behavior as **newline-delimited JSON (JSONL)**. Each line is one independent event object. The format is designed for deterministic ordering, incremental inspection, replay, and automated verification.
+OrbitOps records link-emulator behavior as newline-delimited JSON (JSONL). Each line is one independent event object. The format supports incremental inspection, deterministic ordering, partial-run recovery, and automated counter verification.
 
-The schema described here is version `1`.
+New OrbitOps v0.3 runs emit schema version `2`. Schema version `1` logs produced by OrbitOps v0.2 remain readable and verifiable.
 
-## Design goals
+## Compatibility decision
 
-- every receive, impairment decision, scheduling decision, and successful forward can be observed;
-- event order is explicit through a contiguous `event_index`;
-- all times are relative to one runtime session and use monotonic nanoseconds;
-- interrupted runs remain readable even when no final summary exists;
-- complete runs end with a summary whose counters can be independently recomputed;
-- event files do not contain raw packet payloads.
+Schema version `2` adds one leading `run_metadata` event. Existing packet, impairment, scheduling, forwarding, reorder, and `run_summary` records keep the same top-level fields and event-specific attributes.
 
-## Canonical record
+The compatibility rules are:
+
+- version `1` streams contain no `run_metadata` event;
+- version `2` streams begin with exactly one `run_metadata` event;
+- one stream uses one schema version and one session identifier;
+- existing summary counter names and meanings are unchanged;
+- `load_link_events` reads versions `1` and `2`;
+- OrbitOps emits version `2` for new runs.
+
+The decision is also recorded in [`adr/0003-link-run-metadata.md`](adr/0003-link-run-metadata.md).
+
+## Canonical record shape
+
+Every record uses the same top-level shape:
 
 ```json
 {
@@ -21,69 +29,89 @@ The schema described here is version `1`.
     "payload_bytes": 35
   },
   "elapsed_ns": 1275000,
-  "event_index": 0,
+  "event_index": 1,
   "event_type": "packet_received",
   "packet_index": 0,
-  "schema_version": 1,
+  "schema_version": 2,
   "session_id": "demo-session"
 }
 ```
 
-Fields:
-
 | Field | Type | Description |
 |---|---|---|
-| `schema_version` | integer | Event schema version. Version `1` is currently supported. |
-| `session_id` | string | Non-empty identifier shared by all events in one run. |
-| `event_index` | integer | Zero-based contiguous event order within the session. |
-| `elapsed_ns` | integer | Monotonic nanoseconds elapsed since the runtime started. |
-| `event_type` | string | Stable event name listed below. |
-| `packet_index` | integer or `null` | Deterministic input-packet index, when applicable. |
+| `schema_version` | integer | Link-event schema version: `1` or `2`. |
+| `session_id` | string | Non-empty identifier shared by all records in a run. |
+| `event_index` | integer | Zero-based contiguous order within the run. |
+| `elapsed_ns` | integer | Monotonic nanoseconds elapsed since runtime start. |
+| `event_type` | string | Stable event name documented below. |
+| `packet_index` | integer or `null` | Deterministic input-packet index when applicable. |
 | `attributes` | object | Event-specific scalar metadata. |
 
-`attributes` values are limited to strings, integers, finite floating-point numbers, booleans, and `null`. Nested objects and arrays are not used in schema version `1`.
+Attribute values are limited to strings, integers, finite floats, booleans, and `null`. Nested arrays and objects are not part of the current schema.
 
-## Event types
+## `run_metadata`
+
+Schema-version-2 streams begin with:
+
+```json
+{
+  "attributes": {
+    "configuration_fingerprint": "sha256:5a0f...",
+    "profile_name": "intermittent-loss",
+    "profile_reference": "intermittent-loss",
+    "profile_schema_version": 1
+  },
+  "elapsed_ns": 0,
+  "event_index": 0,
+  "event_type": "run_metadata",
+  "packet_index": null,
+  "schema_version": 2,
+  "session_id": "mission-profile-demo"
+}
+```
+
+Attributes:
+
+- `configuration_fingerprint`: SHA-256 fingerprint of the effective `LinkConfig` after all overrides;
+- `profile_name`: resolved profile name, or `null` when no profile was selected;
+- `profile_reference`: original CLI reference, or `null`;
+- `profile_schema_version`: selected profile schema version, or `null`.
+
+The three profile fields are either all populated or all `null`. A profile name does not replace the fingerprint: explicit CLI options may change the effective configuration after profile loading.
+
+The fingerprint is deterministic reproducibility evidence. It is not a MAC, signature, provenance proof, or protection against log modification.
+
+## Packet and delivery event types
 
 ### `packet_received`
 
-Emitted once for every input datagram accepted by the runtime.
+Emitted once for every accepted input datagram.
 
-Attributes:
-
-- `payload_bytes`
+Attributes: `payload_bytes`.
 
 ### `packet_dropped`
 
-Emitted when the impairment engine discards an input packet. No delivery events are produced for that packet.
+Emitted when the impairment engine discards an input packet.
 
-Attributes:
-
-- `payload_bytes`
+Attributes: `payload_bytes`.
 
 ### `packet_delayed`
 
-Emitted once when a non-dropped packet receives a positive delay after fixed latency and jitter are combined.
+Emitted when a non-dropped packet receives a positive effective delay.
 
-Attributes:
-
-- `delay_ms`
+Attributes: `delay_ms`.
 
 ### `packet_duplicated`
 
-Emitted once when one input packet produces two scheduled deliveries.
+Emitted when one input packet creates two scheduled deliveries.
 
-Attributes:
-
-- `copies`
+Attributes: `copies`.
 
 ### `packet_corrupted`
 
-Emitted once when the output payload has one deterministic bit flipped.
+Emitted when one deterministic bit is flipped.
 
-Attributes:
-
-- `corrupted_bit`
+Attributes: `corrupted_bit`.
 
 ### `delivery_scheduled`
 
@@ -91,96 +119,84 @@ Emitted once per delivery, including duplicate copies.
 
 Attributes:
 
-- `copy_index`
-- `corrupted_bit`
-- `delay_ms`
-- `hold_packets`
-- `payload_bytes`
-
-A positive `hold_packets` records the bounded-reordering decision even if the stream ends before a later packet overtakes it.
+- `copy_index`;
+- `corrupted_bit`;
+- `delay_ms`;
+- `hold_packets`;
+- `payload_bytes`.
 
 ### `packet_reordered`
 
-Emitted once per packet only when that packet is **actually forwarded after a newer packet**. It therefore represents observable reordering, not merely a hold decision.
+Emitted once when a packet is actually forwarded after a newer packet.
 
 Attributes:
 
-- `overtaken_by_packet_index`
-- `release_after_packet`
+- `overtaken_by_packet_index`;
+- `release_after_packet`.
 
 ### `packet_forwarded`
 
-Emitted after a complete UDP datagram has been successfully sent to the configured downstream endpoint.
+Emitted after a complete UDP datagram is sent downstream.
 
 Attributes:
 
-- `copy_index`
-- `corrupted_bit`
-- `payload_bytes`
+- `copy_index`;
+- `corrupted_bit`;
+- `payload_bytes`.
 
-### `run_summary`
+## `run_summary`
 
-The final event of a complete run. Its `packet_index` is `null`. The attributes contain counters derived from all preceding events:
+The final event of a complete run. Its `packet_index` is `null`. Attributes remain exactly:
 
-- `packets_received`
-- `packets_dropped`
-- `packets_delayed`
-- `packets_duplicated`
-- `packets_corrupted`
-- `packets_reordered`
-- `deliveries_scheduled`
-- `deliveries_forwarded`
+- `packets_received`;
+- `packets_dropped`;
+- `packets_delayed`;
+- `packets_duplicated`;
+- `packets_corrupted`;
+- `packets_reordered`;
+- `deliveries_scheduled`;
+- `deliveries_forwarded`.
 
-A summary is valid only when each counter exactly matches the corresponding emitted events.
+A summary is valid only when each counter matches the corresponding preceding packet or delivery events. `run_metadata` does not contribute to any counter.
 
-## Ordering and determinism
+## Ordering rules
 
-Within one run:
+For schema version `2`:
 
-1. `event_index` starts at `0` and increases by one;
-2. `elapsed_ns` never decreases;
-3. all events use the same `session_id`;
-4. events for one packet are emitted in a stable order;
-5. scheduled deliveries use the scheduler order: deadline, packet index, then copy index;
-6. `run_summary`, when present, is the final event.
+1. `run_metadata` is event index `0`;
+2. packet and delivery events follow in stable runtime order;
+3. `elapsed_ns` never decreases;
+4. all records use one `session_id` and schema version;
+5. `run_summary`, when present, is final.
 
-The impairment decisions are deterministic for a fixed seed, configuration, and packet stream. Live `elapsed_ns` values and an automatically generated session identifier are operational metadata and are not part of that decision contract. Callers can provide an explicit `session_id` and injected clock for reproducible tests.
+A partial version-2 log containing only `run_metadata`, or metadata plus packet events, remains structurally readable. A complete stream is required for summary validation.
 
-## Writing and reading logs
-
-```python
-from pathlib import Path
-
-from orbitops.link import JsonlEventRecorder, LinkConfig, LinkRuntime
-
-with JsonlEventRecorder(Path("sessions/link-events.jsonl")) as recorder:
-    runtime = LinkRuntime(
-        ("127.0.0.1", 9001),
-        ("127.0.0.1", 9000),
-        LinkConfig(seed=42, loss_rate=0.05),
-        event_sink=recorder.write,
-        session_id="demo-001",
-    )
-    runtime.open()
-    runtime.run()
-```
-
-Replay and validate a complete file:
+## Reading logs
 
 ```python
 from pathlib import Path
 
-from orbitops.link import load_link_events, validate_run_summary
+from orbitops.link import (
+    load_link_events,
+    run_metadata_from_events,
+    validate_run_summary,
+)
 
 events = load_link_events(Path("sessions/link-events.jsonl"))
+metadata = run_metadata_from_events(events)
 statistics = validate_run_summary(events)
+
+print(metadata)
+print(statistics)
 ```
 
-`load_link_events` accepts a structurally valid partial log without a summary, allowing interrupted runs to be inspected. `validate_run_summary` requires a complete run and verifies all counters.
+`run_metadata_from_events` returns `None` for a valid legacy schema-version-1 stream.
 
-## Security and privacy notes
+## Security and privacy
 
-- Event logs contain metadata, not raw datagram payloads.
-- Session identifiers are operator-controlled and should not contain secrets.
-- File paths and retention policies remain the responsibility of the caller.
-- JSONL logs are untrusted input when imported; OrbitOps validates their structure and schema version before use.
+- Logs contain metadata, not raw datagram payloads.
+- `profile_reference` may reveal a local path or operator naming convention.
+- Session identifiers and profile references must not contain secrets.
+- Plaintext logs can be edited; structural validation does not prove authenticity.
+- Imported JSONL is untrusted input and is validated before use.
+- Retention and operating-system file permissions remain operator responsibilities.

@@ -93,6 +93,9 @@ jobs:
         with:
           python-version: "3.13"
 
+      - name: Install OrbitOps CLI
+        run: python -m pip install .
+
       - name: Configure C++ simulator
         run: >-
           cmake -S onboard -B build
@@ -107,6 +110,9 @@ jobs:
 
       - name: Verify C++ and Python interoperability
         run: python scripts/integration_check.py ./build/orbitops_sim
+
+      - name: Run installed mission-profile demo
+        run: python scripts/profile_demo_check.py ./build/orbitops_sim
 
       - name: Smoke-test simulator CLI
         run: |

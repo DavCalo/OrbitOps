@@ -8,10 +8,11 @@ import uuid
 from contextlib import ExitStack
 from pathlib import Path
 
-from orbitops.profiles import resolve_mission_profile
+from orbitops.profiles import MissionProfile, resolve_mission_profile
 
 from .config import LinkConfig
-from .events import JsonlEventRecorder
+from .events import JsonlEventRecorder, LinkRunMetadata
+from .fingerprint import configuration_fingerprint
 from .runtime import LinkRuntime
 from .statistics import LinkStatistics
 
@@ -117,13 +118,12 @@ def configure_link_parser(parser: argparse.ArgumentParser) -> None:
     )
 
 
-def _effective_link_config(args: argparse.Namespace) -> LinkConfig:
+def _resolved_link_configuration(
+    args: argparse.Namespace,
+) -> tuple[LinkConfig, MissionProfile | None]:
     profile_reference: str | None = args.profile
-    base = (
-        LinkConfig()
-        if profile_reference is None
-        else resolve_mission_profile(profile_reference).link_config
-    )
+    profile = None if profile_reference is None else resolve_mission_profile(profile_reference)
+    base = LinkConfig() if profile is None else profile.link_config
 
     seed: int | None = args.seed
     loss_rate: float | None = args.loss_rate
@@ -133,14 +133,34 @@ def _effective_link_config(args: argparse.Namespace) -> LinkConfig:
     jitter_ms: int | None = args.jitter_ms
     reorder_window: int | None = args.reorder_window
 
-    return LinkConfig(
-        seed=base.seed if seed is None else seed,
-        loss_rate=base.loss_rate if loss_rate is None else loss_rate,
-        duplicate_rate=base.duplicate_rate if duplicate_rate is None else duplicate_rate,
-        corrupt_rate=base.corrupt_rate if corrupt_rate is None else corrupt_rate,
-        latency_ms=base.latency_ms if latency_ms is None else latency_ms,
-        jitter_ms=base.jitter_ms if jitter_ms is None else jitter_ms,
-        reorder_window=base.reorder_window if reorder_window is None else reorder_window,
+    return (
+        LinkConfig(
+            seed=base.seed if seed is None else seed,
+            loss_rate=base.loss_rate if loss_rate is None else loss_rate,
+            duplicate_rate=base.duplicate_rate if duplicate_rate is None else duplicate_rate,
+            corrupt_rate=base.corrupt_rate if corrupt_rate is None else corrupt_rate,
+            latency_ms=base.latency_ms if latency_ms is None else latency_ms,
+            jitter_ms=base.jitter_ms if jitter_ms is None else jitter_ms,
+            reorder_window=base.reorder_window if reorder_window is None else reorder_window,
+        ),
+        profile,
+    )
+
+
+def _run_metadata(
+    config: LinkConfig,
+    profile: MissionProfile | None,
+    profile_reference: str | None,
+) -> LinkRunMetadata:
+    if profile is None:
+        return LinkRunMetadata(configuration_fingerprint(config))
+    if profile_reference is None:
+        raise AssertionError("profile reference missing for resolved profile")
+    return LinkRunMetadata(
+        configuration_fingerprint=configuration_fingerprint(config),
+        profile_name=profile.name,
+        profile_reference=profile_reference,
+        profile_schema_version=profile.schema_version,
     )
 
 
@@ -160,7 +180,8 @@ def run_link_command(args: argparse.Namespace) -> int:
     """Resolve configuration, run the proxy, and report final statistics."""
 
     try:
-        config = _effective_link_config(args)
+        config, profile = _resolved_link_configuration(args)
+        metadata = _run_metadata(config, profile, args.profile)
         session_id = args.session_id or uuid.uuid4().hex
         with ExitStack() as stack:
             recorder = (
@@ -174,15 +195,19 @@ def run_link_command(args: argparse.Namespace) -> int:
                 config,
                 event_sink=None if recorder is None else recorder.write,
                 session_id=session_id,
+                run_metadata=metadata,
             )
             runtime.open()
             try:
                 listen_host, listen_port = runtime.bound_address
+                profile_label = metadata.profile_name or "none"
                 print(
                     "link ready: "
                     f"{listen_host}:{listen_port} -> "
                     f"{args.forward_host}:{args.forward_port} "
-                    f"session={session_id}",
+                    f"session={session_id} "
+                    f"profile={profile_label} "
+                    f"config={metadata.configuration_fingerprint}",
                     flush=True,
                 )
                 runtime.run(max_packets=args.max_packets)

@@ -1,12 +1,19 @@
 # Architecture
 
-OrbitOps models a compact end-to-end telemetry path with three independently testable stages: an on-board producer, a deterministic link boundary, and a ground consumer.
+OrbitOps models a compact telemetry path with an on-board producer, a deterministic link boundary, and a ground consumer. Versioned mission profiles now sit before the link boundary as reusable configuration inputs.
 
 ```mermaid
 flowchart LR
-    SIM[On-board simulator\nC++17] -->|35-byte UDP packet| LINK[Link emulator\nPython]
-    LINK -->|Impaired UDP packet| RX[Ground receiver\nPython]
-    LINK --> EVT[Versioned link events]
+    PROF[Versioned TOML profile] --> RES[Configuration resolver]
+    CLI[Explicit CLI overrides] --> RES
+    RES --> LINK[Link emulator
+Python]
+    SIM[On-board simulator
+C++17] -->|35-byte UDP packet| LINK
+    LINK -->|Impaired UDP packet| RX[Ground receiver
+Python]
+    LINK --> EVT[Link-event schema v2
+run metadata + events + summary]
     RX --> DEC[Protocol decoder]
     DEC --> ALM[Alarm engine]
     DEC --> REC[Session recorder]
@@ -15,44 +22,53 @@ flowchart LR
 
 ## Component boundaries
 
+### Mission-profile subsystem
+
+Responsibilities:
+
+- parse strict versioned TOML using `tomllib`;
+- reject unknown fields, invalid types, unsupported versions, and invalid link values;
+- load built-in package resources and explicit UTF-8 files;
+- resolve ambiguous references explicitly;
+- return immutable profile and `LinkConfig` models.
+
+Profile documents are data-only. They do not execute code, interpolate environment variables, fetch remote content, or contain credentials.
+
+### Configuration resolver
+
+The resolver applies:
+
+```text
+LinkConfig defaults -> selected profile -> explicit CLI options
+```
+
+Omitted CLI options preserve profile values. Explicit zero values remain valid overrides. The resolved `LinkConfig` is encoded canonically and fingerprinted before event-log creation or socket construction.
+
+The canonical representation and fingerprint are owned by the link configuration layer. `orbitops.profiles` retains compatibility exports for profile callers.
+
 ### On-board simulator
 
 Responsibilities:
 
 - generate deterministic spacecraft state;
-- encode protocol version 1 packets;
+- encode protocol-version-1 packets;
 - send complete datagrams to one IPv4 destination;
-- optionally inject simple transmitter-side packet loss for backwards-compatible scenarios.
+- optionally inject backwards-compatible transmitter-side packet loss.
 
-It does not decode commands, persist state, or model hardware timing guarantees.
+It does not model flight hardware timing guarantees.
 
 ### Link emulator
 
 Responsibilities:
 
 - receive an ordered UDP datagram stream;
-- derive deterministic impairment decisions from an explicit seed and configuration;
+- derive deterministic impairment decisions from an effective configuration;
 - schedule delayed, duplicated, corrupted, and held deliveries;
-- forward complete datagrams to one downstream IPv4 endpoint;
-- emit versioned events and a final run summary;
-- close sockets cleanly after an operator stop or finite packet budget.
+- forward complete datagrams;
+- emit one leading run-metadata record, packet events, and a final summary;
+- close sockets cleanly after finite completion or cooperative stop.
 
-The impairment engine is pure and independent from sockets. The scheduler consumes immutable outcomes and caller-provided monotonic timestamps. The runtime composes both around UDP I/O.
-
-The stable semantics are documented in [`adr/0001-link-emulator-semantics.md`](adr/0001-link-emulator-semantics.md). The observable event contract is documented in [`link-event-schema.md`](link-event-schema.md).
-
-### Protocol
-
-The binary protocol is the interoperability contract between C++ and Python. The reference layout is documented in [`protocol.md`](protocol.md), implemented independently in both languages, and checked by cross-language integration tests.
-
-Protocol changes require:
-
-1. an explicit versioning decision;
-2. updated documentation;
-3. compatibility or migration notes;
-4. golden-vector and integration tests.
-
-Link behavior does not alter protocol field meaning. Corruption scenarios intentionally produce packets that may fail CRC validation at the ground station.
+The impairment engine remains pure and independent from sockets. The scheduler consumes immutable outcomes and caller-provided monotonic timestamps.
 
 ### Ground station
 
@@ -60,58 +76,56 @@ Responsibilities:
 
 - receive and validate datagrams;
 - reject malformed, unsupported, or CRC-invalid packets;
-- present decoded telemetry;
-- derive alarms and sequence anomalies;
+- present telemetry and alarms;
 - record and replay raw packet sessions.
 
-Presentation is intentionally terminal-first. A future TUI or web UI should consume the same decoder and event models rather than duplicate protocol or impairment logic.
+## Compatibility contracts
+
+OrbitOps maintains separate contracts for:
+
+1. the 35-byte telemetry protocol;
+2. deterministic SplitMix64 impairment decisions;
+3. mission-profile schema and built-in values;
+4. canonical effective-configuration encoding and fingerprinting;
+5. link-event JSONL.
+
+Changing one contract does not silently redefine another. Profile metadata does not affect the effective-configuration fingerprint.
+
+Link-event schema version `2` adds `run_metadata` while preserving version-1 reading and all existing packet-event and summary-counter meanings.
 
 ## Deterministic data flow
 
-For every input datagram, the impairment engine consumes a fixed sequence of six SplitMix64 outputs. Decisions therefore remain reproducible when unrelated impairments are disabled or enabled. The scheduler orders eligible deliveries by deadline, packet index, and copy index.
+For every input datagram, the impairment engine consumes a fixed sequence of six SplitMix64 outputs. The scheduler orders eligible deliveries by deadline, packet index, and copy index.
 
-The deterministic contract includes decisions and delivery order. It excludes wall-clock timestamps, operating-system scheduling, ephemeral ports, and automatically generated session identifiers.
+The deterministic contract includes configuration resolution, fingerprinting, impairment decisions, and delivery order. It excludes wall-clock timestamps, OS scheduling, ephemeral ports, and automatically generated session identifiers.
 
 ## Observability flow
 
-The runtime emits events in a stable sequence:
+A new run emits:
 
-1. receive;
-2. selected impairment decisions;
-3. one scheduling event per delivery;
-4. observed reorder events when applicable;
-5. successful forwarding events;
-6. final run summary.
+1. `run_metadata` with profile identity and effective-configuration fingerprint;
+2. receive and selected impairment records;
+3. one scheduling record per delivery;
+4. observed reorder records;
+5. successful forwarding records;
+6. final `run_summary`.
 
-Statistics are derived from emitted non-summary events. Complete logs are valid only when the final summary matches an independent recomputation.
+Statistics remain derived only from packet and delivery events. Complete logs are valid only when the final summary matches an independent recomputation.
 
 ## Design decisions
 
-### Dependency-light runtime
-
-The Python runtime uses only the standard library and the C++ simulator uses system networking APIs. Development tooling is isolated in the optional `dev` extra.
-
-### UDP transport
-
-UDP keeps packet boundaries visible and makes delivery impairments explicit. Reliability, authentication, confidentiality, sender authorization, and congestion control are intentionally out of scope.
-
-### Fixed-width packet
-
-A fixed 35-byte layout is easy to inspect and test across languages. Future payload families should add a packet type or schema identifier instead of silently changing field meaning.
-
-### Separate telemetry and link logs
-
-Ground-station recordings contain raw telemetry packets for replay. Link-event logs contain operational metadata but no raw datagram payloads. The formats have separate versions and validation rules.
-
-### Deterministic scenarios
-
-Faults and state transitions are derived from sequence number, seed, and explicit CLI arguments. Repeatable behavior is preferred over realism that cannot be tested.
+- Runtime dependencies remain limited to the Python standard library and platform networking APIs.
+- UDP keeps datagram boundaries and impairment behavior explicit.
+- Ground telemetry recordings and link-event logs remain separate formats.
+- Built-in profiles are reproducible examples and fixtures, not RF-channel models.
+- SHA-256 fingerprints identify equivalent effective configurations but do not authenticate them.
+- OrbitOps remains a development simulator, not flight software.
 
 ## Extension points
 
-- reusable link configuration profiles;
-- command uplink and acknowledgements;
 - configurable alarm policy;
+- command uplink and acknowledgements;
 - event sink adapters for OpenTelemetry or Datadog;
 - terminal or web mission timeline;
-- CCSDS research adapter kept separate from the stable custom protocol.
+- signed run manifests where provenance is justified;
+- CCSDS research adapters kept separate from the stable custom protocol.
