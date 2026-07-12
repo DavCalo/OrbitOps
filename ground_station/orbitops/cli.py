@@ -6,7 +6,9 @@ import argparse
 from pathlib import Path
 
 from . import __version__
-from .alarms import AlarmEngine
+from .alarm_policies import AlarmPolicy, resolve_alarm_policy
+from .alarm_policies.cli import configure_alarm_policy_parser, run_alarm_policy_command
+from .alarms import DEFAULT_ALARM_POLICY, AlarmEngine
 from .link.cli import configure_link_parser, run_link_command
 from .profiles.cli import configure_profile_parser, run_profile_command
 from .protocol import ProtocolError, decode_packet
@@ -30,6 +32,11 @@ def build_parser() -> argparse.ArgumentParser:
     listen_parser.add_argument("--host", default="127.0.0.1")
     listen_parser.add_argument("--port", type=int, default=9000)
     listen_parser.add_argument("--record", type=Path)
+    listen_parser.add_argument(
+        "--alarm-policy",
+        metavar="REFERENCE",
+        help="built-in alarm policy name or local TOML file reference",
+    )
 
     link_parser = subparsers.add_parser(
         "link",
@@ -47,6 +54,12 @@ def build_parser() -> argparse.ArgumentParser:
     )
     configure_profile_parser(profile_parser)
 
+    alarm_policy_parser = subparsers.add_parser(
+        "alarm-policy",
+        help="list, inspect, and validate alarm policies",
+    )
+    configure_alarm_policy_parser(alarm_policy_parser)
+
     replay_parser = subparsers.add_parser("replay", help="replay a JSONL session")
     replay_parser.add_argument("path", type=Path)
     replay_parser.add_argument("--speed", type=float, default=1.0)
@@ -63,8 +76,15 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "listen":
         if not 1 <= args.port <= 65535:
             raise SystemExit("port must be between 1 and 65535")
+        reference: str | None = args.alarm_policy
         try:
-            listen(args.host, args.port, args.record)
+            policy: AlarmPolicy = (
+                DEFAULT_ALARM_POLICY if reference is None else resolve_alarm_policy(reference)
+            )
+        except ValueError as exc:
+            raise SystemExit(f"listen failed: {exc}") from exc
+        try:
+            listen(args.host, args.port, args.record, policy)
         except KeyboardInterrupt:
             print("\nGround station stopped.")
         except OSError as exc:
@@ -76,6 +96,9 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.command == "profile":
         return run_profile_command(args)
+
+    if args.command == "alarm-policy":
+        return run_alarm_policy_command(args)
 
     if args.command == "replay":
         if args.speed <= 0:

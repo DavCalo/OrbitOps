@@ -12,6 +12,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "ground_station"))
 
 from orbitops import __version__  # noqa: E402
+from orbitops.alarms import DEFAULT_ALARM_POLICY  # noqa: E402
 from orbitops.cli import main  # noqa: E402
 from orbitops.protocol import Mode, TelemetryPacket, encode_packet  # noqa: E402
 
@@ -47,7 +48,7 @@ class CliTests(unittest.TestCase):
     def test_listen_delegates_to_receiver(self) -> None:
         with patch("orbitops.cli.listen") as mocked:
             self.assertEqual(main(["listen", "--port", "9010"]), 0)
-        mocked.assert_called_once_with("127.0.0.1", 9010, None)
+        mocked.assert_called_once_with("127.0.0.1", 9010, None, DEFAULT_ALARM_POLICY)
 
     def test_profile_delegates_to_profile_cli(self) -> None:
         with patch("orbitops.cli.run_profile_command", return_value=7) as mocked:

@@ -7,7 +7,8 @@ import socket
 import time
 from pathlib import Path
 
-from .alarms import AlarmEngine, format_alarm_transition
+from .alarm_policies import AlarmPolicy
+from .alarms import DEFAULT_ALARM_POLICY, AlarmEngine, format_alarm_transition
 from .protocol import ProtocolError, TelemetryPacket, decode_packet
 from .recorder import SessionRecorder
 
@@ -32,8 +33,13 @@ def process_packet(raw: bytes, engine: AlarmEngine) -> None:
         print(format_alarm_transition(transition))
 
 
-def listen(host: str, port: int, record_path: Path | None = None) -> None:
-    engine = AlarmEngine()
+def listen(
+    host: str,
+    port: int,
+    record_path: Path | None = None,
+    alarm_policy: AlarmPolicy = DEFAULT_ALARM_POLICY,
+) -> None:
+    engine = AlarmEngine(alarm_policy)
     recorder_context = (
         SessionRecorder(record_path) if record_path is not None else contextlib.nullcontext()
     )

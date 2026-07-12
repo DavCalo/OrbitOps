@@ -1,0 +1,18 @@
+schema_version = 1
+name = "conservative"
+description = "Earlier warnings and wider recovery margins for cautious operations."
+
+[temperature]
+warning_c = 45.0
+critical_c = 55.0
+hysteresis_c = 2.0
+
+[battery]
+critical_v = 7.4
+hysteresis_v = 0.2
+
+[mode]
+alarm_on_safe = true
+
+[sequence]
+detect_gaps = true

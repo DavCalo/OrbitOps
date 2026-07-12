@@ -47,6 +47,7 @@ package:
 	rm -rf dist
 	$(PYTHON) -m build
 	$(PYTHON) scripts/profile_package_check.py
+	$(PYTHON) scripts/alarm_policy_package_check.py
 
 verify: quality test integration package
 

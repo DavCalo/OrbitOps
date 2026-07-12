@@ -53,6 +53,7 @@ jobs:
           orbitops --version
           orbitops --help
           python scripts/profile_package_check.py
+          python scripts/alarm_policy_package_check.py
 
   python-compatibility:
     name: Python ${{ matrix.python-version }}
