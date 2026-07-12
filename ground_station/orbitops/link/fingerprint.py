@@ -7,6 +7,8 @@ import json
 
 from .config import LinkConfig
 
+# Version the canonical representation independently from profile and event
+# schemas so any future encoding change is an explicit compatibility decision.
 EFFECTIVE_CONFIG_SCHEMA_VERSION = 1
 
 
@@ -14,7 +16,8 @@ def canonical_effective_config(config: LinkConfig) -> str:
     """Return the canonical JSON representation of an effective link configuration.
 
     Probability values use Python's exact hexadecimal floating-point form so the
-    representation does not depend on source TOML formatting or locale.
+    representation does not depend on source TOML formatting or locale. Profile
+    names, source paths, and other metadata are intentionally excluded.
     """
 
     if not isinstance(config, LinkConfig):
@@ -36,7 +39,7 @@ def canonical_effective_config(config: LinkConfig) -> str:
 
 
 def configuration_fingerprint(config: LinkConfig) -> str:
-    """Return a versioned SHA-256 fingerprint for an effective configuration."""
+    """Return a SHA-256 reproducibility identifier, not an authenticity proof."""
 
     canonical = canonical_effective_config(config).encode("ascii")
     return f"sha256:{hashlib.sha256(canonical).hexdigest()}"

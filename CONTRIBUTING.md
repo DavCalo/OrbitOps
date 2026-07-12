@@ -35,6 +35,23 @@ make verify
 - Do not weaken CRC, input validation, CI permissions, or security checks without a documented reason.
 - Never commit secrets, private telemetry, or generated session recordings.
 
+## Code documentation standard
+
+OrbitOps treats comments and docstrings as part of the maintenance contract.
+
+- Use docstrings for public Python modules, classes, and functions, and for private
+  helpers whose contract is not obvious from their name and types.
+- Use inline comments to explain rationale, invariants, units, compatibility
+  constraints, or deliberate trade-offs.
+- Prefer precise names, types, constants, and small functions over comments that
+  merely narrate the next statement.
+- Replace domain-specific magic numbers with named constants whose names include
+  units where practical.
+- Keep comments synchronized with behavior; a stale comment is a defect.
+- Track unfinished work as `TODO(#issue): ...` or `FIXME(#issue): ...` rather than
+  leaving unowned notes in the source.
+- Record cross-cutting or compatibility-sensitive decisions in an ADR.
+
 ## Commit messages
 
 Use concise, imperative Conventional Commit-style subjects when practical:

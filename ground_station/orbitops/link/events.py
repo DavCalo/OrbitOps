@@ -13,6 +13,8 @@ from types import MappingProxyType
 from typing import TypeAlias
 
 LINK_EVENT_SCHEMA_VERSION = 2
+# Schema 1 contains packet/delivery events plus a summary. Schema 2 adds a
+# required leading metadata record; both versions remain readable.
 _SUPPORTED_LINK_EVENT_SCHEMA_VERSIONS = frozenset({1, LINK_EVENT_SCHEMA_VERSION})
 _FINGERPRINT_PATTERN = re.compile(r"sha256:[0-9a-f]{64}")
 
@@ -73,7 +75,12 @@ def _validate_attributes(attributes: object) -> dict[str, JsonScalar]:
 
 @dataclass(frozen=True, slots=True)
 class LinkRunMetadata:
-    """Identity and effective-configuration evidence for one link run."""
+    """Identity and effective-configuration evidence for one link run.
+
+    The fingerprint identifies canonical configuration bytes; it is not a
+    signature or proof of provenance. Profile identity is all-present or
+    all-absent so a record cannot describe a partially identified profile.
+    """
 
     configuration_fingerprint: str
     profile_name: str | None = None
@@ -95,6 +102,8 @@ class LinkRunMetadata:
         )
         schema_version = self.profile_schema_version
         identity_values = (name, reference, schema_version)
+        # Partial identity would make a recorded run impossible to reproduce
+        # unambiguously.
         populated = sum(value is not None for value in identity_values)
         if populated not in {0, 3}:
             raise ValueError(
@@ -158,7 +167,11 @@ class LinkRunMetadata:
 
 @dataclass(frozen=True, slots=True)
 class LinkEvent:
-    """One immutable, schema-versioned link-emulator event."""
+    """One immutable, schema-versioned link-emulator event.
+
+    Attributes are scalar-only so every JSONL record remains independently
+    parseable without recursive schema rules.
+    """
 
     session_id: str
     event_index: int
@@ -320,6 +333,8 @@ def load_link_events(path: Path) -> tuple[LinkEvent, ...]:
                 session_id = event.session_id
             elif event.session_id != session_id:
                 raise ValueError(f"session_id changed at line {line_number}")
+            # One file is one compatibility stream. Mixing schema versions would
+            # make ordering and metadata rules ambiguous.
             if schema_version is None:
                 schema_version = event.schema_version
             elif event.schema_version != schema_version:
@@ -330,6 +345,7 @@ def load_link_events(path: Path) -> tuple[LinkEvent, ...]:
                 raise ValueError("run_summary must be the final event")
 
             if event.schema_version >= 2:
+                # Metadata is a unique stream header, not a packet-level event.
                 if not events and event.event_type is not LinkEventType.RUN_METADATA:
                     raise ValueError("schema version 2 streams must begin with run_metadata")
                 if event.event_type is LinkEventType.RUN_METADATA:
