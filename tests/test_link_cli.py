@@ -19,9 +19,14 @@ class LinkCliTests(unittest.TestCase):
         self.assertEqual(args.listen_port, 9001)
         self.assertEqual(args.forward_host, "127.0.0.1")
         self.assertEqual(args.forward_port, 9000)
-        self.assertEqual(args.seed, 0)
-        self.assertEqual(args.loss_rate, 0.0)
-        self.assertEqual(args.latency_ms, 0)
+        self.assertIsNone(args.profile)
+        self.assertIsNone(args.seed)
+        self.assertIsNone(args.loss_rate)
+        self.assertIsNone(args.duplicate_rate)
+        self.assertIsNone(args.corrupt_rate)
+        self.assertIsNone(args.latency_ms)
+        self.assertIsNone(args.jitter_ms)
+        self.assertIsNone(args.reorder_window)
         self.assertIsNone(args.event_log)
         self.assertIsNone(args.session_id)
         self.assertIsNone(args.max_packets)
@@ -36,6 +41,7 @@ class LinkCliTests(unittest.TestCase):
             ["link", "--reorder-window", "65536"],
             ["link", "--max-packets", "0"],
             ["link", "--session-id", "   "],
+            ["link", "--profile", "   "],
         ]
 
         for command in invalid_commands:
@@ -100,6 +106,91 @@ class LinkCliTests(unittest.TestCase):
         self.assertIn("link ready: 127.0.0.1:9101", output.getvalue())
         self.assertIn("received=3", output.getvalue())
         self.assertIn("forwarded=6", output.getvalue())
+
+    def test_omitted_cli_values_preserve_profile_configuration(self) -> None:
+        runtime = Mock()
+        runtime.bound_address = ("127.0.0.1", 9001)
+        runtime.statistics = LinkStatistics()
+
+        with (
+            patch("orbitops.link.cli.LinkRuntime", return_value=runtime) as runtime_class,
+            contextlib.redirect_stdout(io.StringIO()),
+        ):
+            self.assertEqual(
+                main(["link", "--profile", "intermittent-loss", "--max-packets", "1"]),
+                0,
+            )
+
+        call = runtime_class.call_args
+        self.assertIsNotNone(call)
+        assert call is not None
+        self.assertEqual(
+            call.args[2],
+            LinkConfig(
+                seed=202603,
+                loss_rate=0.15,
+                latency_ms=80,
+                jitter_ms=20,
+                reorder_window=1,
+            ),
+        )
+
+    def test_explicit_cli_values_override_profile_including_zero(self) -> None:
+        runtime = Mock()
+        runtime.bound_address = ("127.0.0.1", 9001)
+        runtime.statistics = LinkStatistics()
+
+        with (
+            patch("orbitops.link.cli.LinkRuntime", return_value=runtime) as runtime_class,
+            contextlib.redirect_stdout(io.StringIO()),
+        ):
+            self.assertEqual(
+                main(
+                    [
+                        "link",
+                        "--profile",
+                        "intermittent-loss",
+                        "--seed",
+                        "7",
+                        "--loss-rate",
+                        "0",
+                        "--latency-ms",
+                        "0",
+                        "--jitter-ms",
+                        "0",
+                        "--reorder-window",
+                        "0",
+                        "--max-packets",
+                        "1",
+                    ]
+                ),
+                0,
+            )
+
+        call = runtime_class.call_args
+        self.assertIsNotNone(call)
+        assert call is not None
+        self.assertEqual(call.args[2], LinkConfig(seed=7))
+
+    def test_invalid_profile_fails_before_runtime_or_event_log_creation(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            event_log = Path(directory) / "events.jsonl"
+            with (
+                patch("orbitops.link.cli.LinkRuntime") as runtime_class,
+                self.assertRaisesRegex(SystemExit, "link failed: mission profile reference"),
+            ):
+                main(
+                    [
+                        "link",
+                        "--profile",
+                        "missing",
+                        "--event-log",
+                        str(event_log),
+                    ]
+                )
+
+            runtime_class.assert_not_called()
+            self.assertFalse(event_log.exists())
 
     def test_event_log_is_created_and_explicit_session_is_used(self) -> None:
         runtime = Mock()

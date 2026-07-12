@@ -49,6 +49,17 @@ class CliTests(unittest.TestCase):
             self.assertEqual(main(["listen", "--port", "9010"]), 0)
         mocked.assert_called_once_with("127.0.0.1", 9010, None)
 
+    def test_profile_delegates_to_profile_cli(self) -> None:
+        with patch("orbitops.cli.run_profile_command", return_value=7) as mocked:
+            self.assertEqual(main(["profile", "list"]), 7)
+        mocked.assert_called_once()
+        call = mocked.call_args
+        self.assertIsNotNone(call)
+        assert call is not None
+        args = call.args[0]
+        self.assertEqual(args.command, "profile")
+        self.assertEqual(args.profile_command, "list")
+
     def test_missing_replay_file(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             missing = Path(directory) / "missing.jsonl"
