@@ -25,6 +25,7 @@ test: build python-tests
 
 integration: build
 	$(PYTHON) scripts/integration_check.py ./$(BUILD_DIR)/orbitops_sim
+	$(PYTHON) scripts/link_integration_check.py ./$(BUILD_DIR)/orbitops_sim
 
 quality:
 	$(PYTHON) -m ruff check .
