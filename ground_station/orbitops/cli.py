@@ -1,4 +1,4 @@
-"""Command-line interface for the OrbitOps ground station."""
+"""Command-line interface for the OrbitOps ground station and link emulator."""
 
 from __future__ import annotations
 
@@ -7,6 +7,7 @@ from pathlib import Path
 
 from . import __version__
 from .alarms import AlarmEngine
+from .link.cli import configure_link_parser, run_link_command
 from .protocol import ProtocolError, decode_packet
 from .receiver import listen, process_packet
 from .recorder import iter_records
@@ -15,7 +16,7 @@ from .recorder import iter_records
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="orbitops",
-        description="Receive, inspect, record, and replay OrbitOps telemetry.",
+        description="Receive, emulate, inspect, record, and replay OrbitOps telemetry.",
     )
     parser.add_argument(
         "--version",
@@ -28,6 +29,16 @@ def build_parser() -> argparse.ArgumentParser:
     listen_parser.add_argument("--host", default="127.0.0.1")
     listen_parser.add_argument("--port", type=int, default=9000)
     listen_parser.add_argument("--record", type=Path)
+
+    link_parser = subparsers.add_parser(
+        "link",
+        help="proxy UDP telemetry through deterministic link impairments",
+        description=(
+            "Forward UDP datagrams through deterministic loss, latency, jitter, "
+            "duplication, corruption, and bounded reordering."
+        ),
+    )
+    configure_link_parser(link_parser)
 
     replay_parser = subparsers.add_parser("replay", help="replay a JSONL session")
     replay_parser.add_argument("path", type=Path)
@@ -52,6 +63,9 @@ def main(argv: list[str] | None = None) -> int:
         except OSError as exc:
             raise SystemExit(f"listen failed: {exc}") from exc
         return 0
+
+    if args.command == "link":
+        return run_link_command(args)
 
     if args.command == "replay":
         if args.speed <= 0:

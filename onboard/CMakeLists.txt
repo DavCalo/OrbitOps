@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
-project(orbitops_sim VERSION 0.1.0 LANGUAGES CXX)
+project(orbitops_sim VERSION 0.2.0 LANGUAGES CXX)
 
 include(CTest)
 include(GNUInstallDirs)
