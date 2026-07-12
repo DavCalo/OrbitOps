@@ -29,7 +29,7 @@ classifiers = [
 dev = [
   "build>=1.2,<2",
   "coverage[toml]>=7.6,<8",
-  "mypy>=1.13,<2",
+  "mypy>=1.13,<3",
   "ruff>=0.9,<1",
 ]
 
