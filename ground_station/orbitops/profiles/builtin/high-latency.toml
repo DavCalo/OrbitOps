@@ -1,0 +1,10 @@
+schema_version = 1
+name = "high-latency"
+description = "Deterministic example with high delay, jitter, and light packet loss."
+
+[link]
+seed = 202604
+loss_rate = 0.01
+latency_ms = 750
+jitter_ms = 150
+reorder_window = 2

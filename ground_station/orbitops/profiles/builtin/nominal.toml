@@ -1,0 +1,5 @@
+schema_version = 1
+name = "nominal"
+description = "Exact pass-through link configuration."
+
+[link]

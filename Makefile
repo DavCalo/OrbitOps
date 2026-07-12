@@ -42,6 +42,7 @@ quality:
 package:
 	rm -rf dist
 	$(PYTHON) -m build
+	$(PYTHON) scripts/profile_package_check.py
 
 verify: quality test integration package
 

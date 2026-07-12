@@ -1,0 +1,10 @@
+schema_version = 1
+name = "intermittent-loss"
+description = "Deterministic example with independent packet loss and mild timing variation."
+
+[link]
+seed = 202603
+loss_rate = 0.15
+latency_ms = 80
+jitter_ms = 20
+reorder_window = 1
