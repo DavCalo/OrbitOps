@@ -59,14 +59,19 @@ class ReceiverTests(unittest.TestCase):
         self.assertIn("mode=NOMINAL", rendered)
         self.assertIn("battery=8.100V", rendered)
 
-    def test_process_packet_prints_alarm(self) -> None:
+    def test_process_packet_prints_alarm_only_on_transition(self) -> None:
         output = io.StringIO()
+        engine = AlarmEngine()
         with contextlib.redirect_stdout(output):
+            process_packet(encode_packet(sample_packet(temperature=6500)), engine)
             process_packet(
-                encode_packet(sample_packet(temperature=6500)),
-                AlarmEngine(),
+                encode_packet(sample_packet(sequence=2, temperature=6600)),
+                engine,
             )
-        self.assertIn("HIGH_TEMPERATURE", output.getvalue())
+
+        rendered = output.getvalue()
+        self.assertEqual(rendered.count("HIGH_TEMPERATURE"), 1)
+        self.assertIn("!! CRITICAL HIGH_TEMPERATURE", rendered)
 
     def test_listen_receives_and_records_packet(self) -> None:
         raw = encode_packet(sample_packet())
