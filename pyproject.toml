@@ -51,6 +51,7 @@ where = ["ground_station"]
 
 [tool.setuptools.package-data]
 orbitops = ["py.typed"]
+"orbitops.profiles.builtin" = ["*.toml"]
 
 [tool.ruff]
 target-version = "py311"
