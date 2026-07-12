@@ -1,15 +1,39 @@
 version: 2
+
 updates:
   - package-ecosystem: github-actions
     directory: /
     schedule:
-      interval: weekly
-      day: monday
-    open-pull-requests-limit: 5
+      interval: monthly
+      time: "09:00"
+      timezone: Europe/Rome
+    open-pull-requests-limit: 3
+    commit-message:
+      prefix: "build(deps)"
+    groups:
+      routine-github-actions:
+        applies-to: version-updates
+        patterns:
+          - "*"
+        update-types:
+          - minor
+          - patch
 
   - package-ecosystem: pip
     directory: /
     schedule:
-      interval: weekly
-      day: monday
-    open-pull-requests-limit: 5
+      interval: monthly
+      time: "09:15"
+      timezone: Europe/Rome
+    open-pull-requests-limit: 3
+    commit-message:
+      prefix: "build(deps-dev)"
+    groups:
+      routine-python-tooling:
+        applies-to: version-updates
+        dependency-type: development
+        patterns:
+          - "*"
+        update-types:
+          - minor
+          - patch
