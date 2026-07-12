@@ -8,6 +8,8 @@ import uuid
 from contextlib import ExitStack
 from pathlib import Path
 
+from orbitops.profiles import resolve_mission_profile
+
 from .config import LinkConfig
 from .events import JsonlEventRecorder
 from .runtime import LinkRuntime
@@ -84,13 +86,18 @@ def configure_link_parser(parser: argparse.ArgumentParser) -> None:
     endpoints.add_argument("--forward-port", type=_port, default=9000)
 
     impairments = parser.add_argument_group("deterministic impairments")
-    impairments.add_argument("--seed", type=_seed, default=0)
-    impairments.add_argument("--loss-rate", type=_probability, default=0.0)
-    impairments.add_argument("--duplicate-rate", type=_probability, default=0.0)
-    impairments.add_argument("--corrupt-rate", type=_probability, default=0.0)
-    impairments.add_argument("--latency-ms", type=_non_negative_int, default=0)
-    impairments.add_argument("--jitter-ms", type=_non_negative_int, default=0)
-    impairments.add_argument("--reorder-window", type=_reorder_window, default=0)
+    impairments.add_argument(
+        "--profile",
+        type=_non_empty,
+        help="load a built-in name or external mission-profile TOML file",
+    )
+    impairments.add_argument("--seed", type=_seed)
+    impairments.add_argument("--loss-rate", type=_probability)
+    impairments.add_argument("--duplicate-rate", type=_probability)
+    impairments.add_argument("--corrupt-rate", type=_probability)
+    impairments.add_argument("--latency-ms", type=_non_negative_int)
+    impairments.add_argument("--jitter-ms", type=_non_negative_int)
+    impairments.add_argument("--reorder-window", type=_reorder_window)
 
     observability = parser.add_argument_group("observability and lifecycle")
     observability.add_argument(
@@ -110,6 +117,33 @@ def configure_link_parser(parser: argparse.ArgumentParser) -> None:
     )
 
 
+def _effective_link_config(args: argparse.Namespace) -> LinkConfig:
+    profile_reference: str | None = args.profile
+    base = (
+        LinkConfig()
+        if profile_reference is None
+        else resolve_mission_profile(profile_reference).link_config
+    )
+
+    seed: int | None = args.seed
+    loss_rate: float | None = args.loss_rate
+    duplicate_rate: float | None = args.duplicate_rate
+    corrupt_rate: float | None = args.corrupt_rate
+    latency_ms: int | None = args.latency_ms
+    jitter_ms: int | None = args.jitter_ms
+    reorder_window: int | None = args.reorder_window
+
+    return LinkConfig(
+        seed=base.seed if seed is None else seed,
+        loss_rate=base.loss_rate if loss_rate is None else loss_rate,
+        duplicate_rate=base.duplicate_rate if duplicate_rate is None else duplicate_rate,
+        corrupt_rate=base.corrupt_rate if corrupt_rate is None else corrupt_rate,
+        latency_ms=base.latency_ms if latency_ms is None else latency_ms,
+        jitter_ms=base.jitter_ms if jitter_ms is None else jitter_ms,
+        reorder_window=base.reorder_window if reorder_window is None else reorder_window,
+    )
+
+
 def _format_statistics(statistics: LinkStatistics) -> str:
     return (
         f"received={statistics.packets_received} "
@@ -123,19 +157,11 @@ def _format_statistics(statistics: LinkStatistics) -> str:
 
 
 def run_link_command(args: argparse.Namespace) -> int:
-    """Validate CLI values, run the proxy, and report its final statistics."""
+    """Resolve configuration, run the proxy, and report final statistics."""
 
-    session_id = args.session_id or uuid.uuid4().hex
     try:
-        config = LinkConfig(
-            seed=args.seed,
-            loss_rate=args.loss_rate,
-            duplicate_rate=args.duplicate_rate,
-            corrupt_rate=args.corrupt_rate,
-            latency_ms=args.latency_ms,
-            jitter_ms=args.jitter_ms,
-            reorder_window=args.reorder_window,
-        )
+        config = _effective_link_config(args)
+        session_id = args.session_id or uuid.uuid4().hex
         with ExitStack() as stack:
             recorder = (
                 stack.enter_context(JsonlEventRecorder(args.event_log))
