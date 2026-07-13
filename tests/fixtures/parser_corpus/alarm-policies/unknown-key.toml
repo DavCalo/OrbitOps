@@ -1,0 +1,18 @@
+schema_version = 1
+name = "invalid"
+
+[temperature]
+warning_c = 50.0
+critical_c = 60.0
+hysteresis_c = 1.0
+unexpected = true
+
+[battery]
+critical_v = 7.0
+hysteresis_v = 0.1
+
+[mode]
+alarm_on_safe = true
+
+[sequence]
+detect_gaps = true

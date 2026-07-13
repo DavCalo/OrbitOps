@@ -1,0 +1,6 @@
+schema_version = 1
+name = "invalid"
+unexpected = true
+
+[link]
+loss_rate = 0.1
