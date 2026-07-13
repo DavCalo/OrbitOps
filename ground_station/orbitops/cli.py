@@ -37,6 +37,12 @@ def build_parser() -> argparse.ArgumentParser:
         metavar="REFERENCE",
         help="built-in alarm policy name or local TOML file reference",
     )
+    listen_parser.add_argument(
+        "--alarm-log",
+        type=Path,
+        metavar="PATH",
+        help="write versioned alarm lifecycle events as JSONL",
+    )
 
     link_parser = subparsers.add_parser(
         "link",
@@ -77,6 +83,7 @@ def main(argv: list[str] | None = None) -> int:
         if not 1 <= args.port <= 65535:
             raise SystemExit("port must be between 1 and 65535")
         reference: str | None = args.alarm_policy
+        effective_reference = "builtin:standard" if reference is None else reference
         try:
             policy: AlarmPolicy = (
                 DEFAULT_ALARM_POLICY if reference is None else resolve_alarm_policy(reference)
@@ -84,7 +91,14 @@ def main(argv: list[str] | None = None) -> int:
         except ValueError as exc:
             raise SystemExit(f"listen failed: {exc}") from exc
         try:
-            listen(args.host, args.port, args.record, policy)
+            listen(
+                args.host,
+                args.port,
+                args.record,
+                policy,
+                args.alarm_log,
+                effective_reference,
+            )
         except KeyboardInterrupt:
             print("\nGround station stopped.")
         except OSError as exc:
