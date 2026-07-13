@@ -1,4 +1,4 @@
-.PHONY: bootstrap build clean configure integration link-demo package profile-demo python-tests quality test verify
+.PHONY: alarm-demo bootstrap build clean configure integration link-demo package profile-demo python-tests quality test verify
 
 PYTHON ?= python3
 CMAKE ?= cmake
@@ -28,12 +28,16 @@ integration: build
 	$(PYTHON) scripts/link_integration_check.py ./$(BUILD_DIR)/orbitops_sim
 	$(PYTHON) scripts/link_demo_check.py ./$(BUILD_DIR)/orbitops_sim
 	$(PYTHON) scripts/profile_demo_check.py ./$(BUILD_DIR)/orbitops_sim
+	$(PYTHON) scripts/alarm_demo_check.py ./$(BUILD_DIR)/orbitops_sim
 
 link-demo: build
 	$(PYTHON) scripts/link_demo_check.py ./$(BUILD_DIR)/orbitops_sim
 
 profile-demo: build
 	$(PYTHON) scripts/profile_demo_check.py ./$(BUILD_DIR)/orbitops_sim
+
+alarm-demo: build
+	$(PYTHON) scripts/alarm_demo_check.py ./$(BUILD_DIR)/orbitops_sim
 
 quality:
 	$(PYTHON) -m ruff check .
@@ -48,6 +52,7 @@ package:
 	$(PYTHON) -m build
 	$(PYTHON) scripts/profile_package_check.py
 	$(PYTHON) scripts/alarm_policy_package_check.py
+	$(PYTHON) scripts/alarm_event_package_check.py
 
 verify: quality test integration package
 

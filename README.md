@@ -2,7 +2,7 @@
 
 # OrbitOps
 
-**A dependency-light CubeSat telemetry platform for deterministic link faults, versioned mission profiles, cross-language protocol testing, and operator-focused demos.**
+**A dependency-light CubeSat telemetry platform for deterministic link faults, versioned mission profiles, auditable alarm lifecycles, and cross-language operator demos.**
 
 <p>
   <a href="https://github.com/DavCalo/OrbitOps/actions/workflows/ci.yml">
@@ -10,7 +10,7 @@
   </a>
   <img src="https://img.shields.io/badge/C%2B%2B-17-00599C?style=flat-square&logo=c%2B%2B&logoColor=white" alt="C++17" />
   <img src="https://img.shields.io/badge/Python-3.11--3.13-3776AB?style=flat-square&logo=python&logoColor=FFD43B" alt="Python 3.11 to 3.13" />
-  <img src="https://img.shields.io/badge/Version-0.3.0-0F766E?style=flat-square" alt="OrbitOps version 0.3.0" />
+  <img src="https://img.shields.io/badge/Version-0.4.0-0F766E?style=flat-square" alt="OrbitOps version 0.4.0" />
   <a href="LICENSE">
     <img src="https://img.shields.io/badge/License-MIT-334155?style=flat-square" alt="MIT license" />
   </a>
@@ -19,12 +19,20 @@
 
 </div>
 
-OrbitOps makes an end-to-end telemetry path concrete. A C++ on-board simulator emits fixed-width binary packets; a deterministic UDP link emulator applies reproducible network impairments; a Python ground station validates, decodes, alarms, records, and replays the resulting telemetry.
+OrbitOps makes an end-to-end telemetry path concrete. A C++ on-board simulator emits
+fixed-width binary packets; a deterministic UDP link emulator applies reproducible network
+impairments; a Python ground station validates, decodes, alarms, records, and replays the
+resulting telemetry.
 
-Versioned TOML mission profiles make link scenarios reusable. Each logged run begins with the selected profile identity and a SHA-256 fingerprint of the **effective** configuration after command-line overrides.
+Versioned TOML mission profiles make link scenarios reusable. Versioned alarm policies make
+thresholds and hysteresis explicit. Link and alarm logs begin with the effective configuration
+or policy identity and a SHA-256 fingerprint of behavior-affecting values.
 
 > [!IMPORTANT]
-> OrbitOps is a technical-preview simulator and portfolio project. It is **not flight software**, a secure communications system, an RF propagation model, or a claim of CCSDS compliance.
+> OrbitOps is a technical-preview simulator and portfolio project. It is **not flight
+> software**, a secure communications system, an RF propagation model, or a claim of CCSDS
+> compliance. Built-in alarm values are deterministic examples, not certified operational
+> limits.
 
 ## Product snapshot
 
@@ -33,35 +41,53 @@ Versioned TOML mission profiles make link scenarios reusable. Each logged run be
 | On-board simulation | Deterministic nominal, thermal, and power scenarios in C++17 |
 | Telemetry protocol | 35-byte, network-byte-order packet with explicit versioning and CRC-32 |
 | Mission profiles | Strict versioned TOML, four built-ins, external files, and deterministic override precedence |
+| Alarm policies | Strict versioned TOML, four built-ins, external files, hysteresis, and stable fingerprints |
 | Link emulation | Seeded loss, latency, jitter, duplication, corruption, and bounded reordering |
-| Ground segment | Validation, terminal presentation, alarms, recording, and replay in Python |
-| Observability | Link-event schema v2 with run metadata, effective-config fingerprints, and verified summaries |
-| Quality gates | Linux/macOS builds, Python compatibility, coverage, typing, sanitizers, packaging, and end-to-end demos |
+| Alarm lifecycle | Session-scoped raised, updated, and cleared transitions with stable identities |
+| Observability | Separate link-event and alarm-event JSONL with metadata and verified summaries |
+| Parser assurance | Bounded deterministic mutations and malformed-input corpora for every public parser |
+| Quality gates | Linux/macOS builds, Python compatibility, coverage, typing, sanitizers, packaging, and installed demos |
 | Runtime dependencies | Python standard library and platform networking APIs only |
 
 ## Architecture
 
 ```mermaid
 flowchart LR
-    PROF[Versioned TOML mission profile] --> RES[Configuration resolver]
-    CLI[Explicit CLI overrides] --> RES
-    RES --> LINK[Deterministic link emulator\nPython]
-    SIM[On-board simulator\nC++17] -->|35-byte UDP telemetry| LINK
-    LINK -->|Impaired UDP telemetry| RX[Ground station\nPython]
-    LINK --> EVT[Versioned link-event JSONL\nprofile + fingerprint]
+    PROF[Mission-profile TOML] --> LRES[Link resolver]
+    LCLI[Link overrides] --> LRES
+    LRES --> LINK[Deterministic link emulator
+Python]
+    SIM[On-board simulator
+C++17] -->|35-byte UDP telemetry| LINK
+    LINK -->|Impaired UDP telemetry| RX[Ground station
+Python]
+    LINK --> LEVT[Link-event JSONL
+profile + fingerprint]
+    POL[Alarm-policy TOML] --> PRES[Policy resolver]
+    PRES --> ALM[Alarm engine]
     RX --> DEC[Validation and decoding]
-    DEC --> ALM[Alarm engine]
-    DEC --> REC[Telemetry session recorder]
+    DEC --> ALM
+    ALM --> AEVT[Alarm-event JSONL
+lifecycle + summary]
+    DEC --> REC[Telemetry recorder]
     REC --> REP[Deterministic replay]
 ```
 
-Configuration precedence is:
+Link configuration precedence is:
 
 ```text
 OrbitOps defaults -> selected profile -> explicit CLI options
 ```
 
-The binary protocol, mission-profile schema, effective-configuration fingerprint, deterministic impairment semantics, and link-event schema are separate compatibility contracts. See the [architecture](docs/architecture.md), [profile ADR](docs/adr/0002-mission-profile-semantics.md), [run-metadata ADR](docs/adr/0003-link-run-metadata.md), and [event schema](docs/link-event-schema.md).
+Alarm behavior comes from one selected policy. Omitting `--alarm-policy` uses
+`builtin:standard`, which preserves the v0.3 effective thresholds.
+
+The binary protocol, telemetry recording, mission-profile schema, link fingerprint, link-event
+schema, alarm-policy schema, lifecycle semantics, and alarm-event schema are separate
+compatibility contracts. See the [architecture](docs/architecture.md),
+[alarm lifecycle ADR](docs/adr/0003-alarm-lifecycle-semantics.md),
+[alarm-event ADR](docs/adr/0004-alarm-event-compatibility.md), and
+[alarm-event schema](docs/alarm-event-schema.md).
 
 ## Quick start
 
@@ -85,110 +111,149 @@ orbitops --version
 ### 2. Build the on-board simulator
 
 ```bash
-cmake -S onboard -B build \
-  -DCMAKE_BUILD_TYPE=Release \
-  -DORBITOPS_WARNINGS_AS_ERRORS=ON
+cmake -S onboard -B build       -DCMAKE_BUILD_TYPE=Release       -DORBITOPS_WARNINGS_AS_ERRORS=ON
 cmake --build build
 
 ./build/orbitops_sim --version
 ```
 
-### 3. Run the profile-driven installed-CLI demo
+### 3. Run the installed alarm-lifecycle demo
+
+```bash
+make alarm-demo
+```
+
+This flagship v0.4.0 workflow uses the installed `orbitops` executable, selects the built-in
+`thermal-demo` policy, sends 52 C++ thermal packets, observes temperature warning and critical
+transitions, observes SAFE-mode entry, and verifies policy identity, fingerprint, lifecycle
+ordering, and final counters.
+
+The installed mission-profile workflow remains available as:
 
 ```bash
 make profile-demo
 ```
 
-The target launches the installed `orbitops` executable with the `intermittent-loss` built-in profile, sends 16 C++ telemetry packets, decodes the forwarded packets, validates the deterministic drop count, and verifies the logged profile identity, configuration fingerprint, and final counters.
-
-The earlier explicit-option demo remains available as:
-
-```bash
-make link-demo
-```
-
-## Mission profile workflow
+## Alarm-policy workflow
 
 List the stable built-in catalog:
 
 ```bash
+orbitops alarm-policy list
+```
+
+Inspect one policy and its effective fingerprint:
+
+```bash
+orbitops alarm-policy show thermal-demo
+```
+
+Validate an external UTF-8 TOML policy:
+
+```bash
+orbitops alarm-policy validate file:policies/lab-policy.toml
+```
+
+Record a direct thermal pass:
+
+```bash
+orbitops listen       --host 127.0.0.1       --port 9000       --alarm-policy thermal-demo       --record sessions/thermal-telemetry.jsonl       --alarm-log sessions/thermal-alarms.jsonl
+```
+
+In another terminal:
+
+```bash
+./build/orbitops_sim       --host 127.0.0.1       --port 9000       --interval-ms 100       --packets 52       --scenario thermal
+```
+
+Stop the listener with `Ctrl+C` after the simulator completes. Cooperative shutdown writes the
+final alarm summary.
+
+## Alarm-event observability
+
+A complete schema-version-1 alarm log contains:
+
+1. one leading `run_metadata` record with policy identity and fingerprint;
+2. typed `alarm_raised`, `alarm_updated`, and `alarm_cleared` records;
+3. one final `run_summary`.
+
+The deterministic thermal demo validates:
+
+```text
+sequence 7  -> alarm_raised  ELEVATED_TEMPERATURE
+sequence 18 -> alarm_updated HIGH_TEMPERATURE
+sequence 51 -> alarm_raised  SAFE_MODE
+```
+
+Alarm logs include packet sequence, stable identity, code, severity, observed value, threshold,
+and human-readable message. They exclude raw packet bytes. Telemetry recordings remain a
+separate schema and file.
+
+Inspect a complete alarm log:
+
+```bash
+python - <<'PY'
+from pathlib import Path
+from orbitops.alarm_events import (
+    load_alarm_events,
+    run_metadata_from_events,
+    validate_run_summary,
+)
+
+events = load_alarm_events(Path("sessions/thermal-alarms.jsonl"))
+print(run_metadata_from_events(events))
+print(validate_run_summary(events))
+PY
+```
+
+A cooperatively interrupted listener writes the summary. Abrupt termination may leave an
+inspectable partial log without one.
+
+## Mission-profile workflow
+
+```bash
 orbitops profile list
-```
-
-Inspect a built-in profile:
-
-```bash
 orbitops profile show degraded-link
-```
-
-Validate an external UTF-8 TOML file:
-
-```bash
 orbitops profile validate file:profiles/lab-pass.toml
 ```
 
 Run the link emulator from a profile:
 
 ```bash
-orbitops link \
-  --profile degraded-link \
-  --listen-port 9001 \
-  --forward-port 9000 \
-  --event-log sessions/degraded-link-events.jsonl \
-  --session-id degraded-pass
+orbitops link       --profile degraded-link       --listen-port 9001       --forward-port 9000       --event-log sessions/degraded-link-events.jsonl       --session-id degraded-pass
 ```
 
-Explicit impairment options override the profile, including zero:
-
-```bash
-orbitops link \
-  --profile degraded-link \
-  --loss-rate 0 \
-  --corrupt-rate 0 \
-  --event-log sessions/override-events.jsonl
-```
-
-A short reference may select a built-in or an existing file. Use `builtin:<name>` or `file:<path>` when the namespace must be explicit.
+Explicit impairment options override the profile, including zero. A short reference may select
+a built-in or existing file. Use `builtin:<name>` or `file:<path>` when the namespace must be
+explicit.
 
 ## Manual profile-driven mission pass
 
 Terminal 1 — ground station:
 
 ```bash
-orbitops listen \
-  --host 127.0.0.1 \
-  --port 9000 \
-  --record sessions/thermal-pass.jsonl
+orbitops listen       --host 127.0.0.1       --port 9000       --alarm-policy conservative       --record sessions/mission-telemetry.jsonl       --alarm-log sessions/mission-alarms.jsonl
 ```
 
 Terminal 2 — deterministic link emulator:
 
 ```bash
-orbitops link \
-  --profile degraded-link \
-  --listen-host 127.0.0.1 \
-  --listen-port 9001 \
-  --forward-host 127.0.0.1 \
-  --forward-port 9000 \
-  --event-log sessions/thermal-link-events.jsonl \
-  --session-id thermal-pass
+orbitops link       --profile degraded-link       --listen-host 127.0.0.1       --listen-port 9001       --forward-host 127.0.0.1       --forward-port 9000       --event-log sessions/mission-link-events.jsonl       --session-id mission-pass
 ```
 
 Terminal 3 — on-board thermal scenario:
 
 ```bash
-./build/orbitops_sim \
-  --host 127.0.0.1 \
-  --port 9001 \
-  --interval-ms 500 \
-  --packets 80 \
-  --scenario thermal
+./build/orbitops_sim       --host 127.0.0.1       --port 9001       --interval-ms 500       --packets 80       --scenario thermal
 ```
 
-The pass demonstrates deterministic impairments, spacecraft-state transitions, alarms, sequence anomalies, telemetry recording, and independently auditable link events. Stop unlimited processes with `Ctrl+C`. Replay the telemetry capture with:
+The pass demonstrates deterministic impairments, state transitions, lifecycle alarms, sequence
+anomalies, telemetry recording, and independently auditable link and alarm events.
+
+Replay the telemetry capture with:
 
 ```bash
-orbitops replay sessions/thermal-pass.jsonl --speed 4
+orbitops replay sessions/mission-telemetry.jsonl --speed 4
 ```
 
 ## Command-line interfaces
@@ -197,6 +262,10 @@ orbitops replay sessions/thermal-pass.jsonl --speed 4
 orbitops profile list
 orbitops profile show REFERENCE
 orbitops profile validate REFERENCE
+
+orbitops alarm-policy list
+orbitops alarm-policy show REFERENCE
+orbitops alarm-policy validate REFERENCE
 
 orbitops link [--profile REFERENCE]
               [--listen-host HOST] [--listen-port PORT]
@@ -208,7 +277,11 @@ orbitops link [--profile REFERENCE]
               [--event-log PATH] [--session-id ID]
               [--max-packets N]
 
-orbitops listen [--host HOST] [--port PORT] [--record PATH]
+orbitops listen [--host HOST] [--port PORT]
+                [--record PATH]
+                [--alarm-policy REFERENCE]
+                [--alarm-log PATH]
+
 orbitops replay PATH [--speed FACTOR]
 orbitops decode PACKET_HEX
 orbitops --version
@@ -218,27 +291,34 @@ orbitops_sim [--host IPv4] [--port PORT] [--interval-ms N]
              [--scenario nominal|thermal|power]
 ```
 
-Invalid profiles and link values are rejected before sockets or event-log files are opened. `--max-packets` makes a run finite and drains delayed or held deliveries before writing the final summary.
+Invalid profiles, policies, and values are rejected before associated sockets or logs open.
 
-## Deterministic link contract
+## Deterministic contracts
 
-For a fixed seed, effective configuration, and ordered packet stream, OrbitOps produces the same impairment decisions across supported Python versions and platforms. The implementation uses an explicitly specified SplitMix64 generator and consumes a fixed number of draws per input packet.
+For a fixed seed, effective link configuration, and ordered packet stream, OrbitOps produces the
+same impairment decisions across supported Python versions and platforms. The implementation
+uses an explicitly specified SplitMix64 generator and fixed draw order.
 
-The canonical effective configuration uses exact hexadecimal floating-point values. Its `sha256:<hex>` fingerprint is stable across equivalent TOML formatting and profile metadata. The fingerprint is reproducibility evidence, **not** a digital signature or authenticity guarantee.
+For a fixed alarm policy and ordered decoded packet stream, lifecycle transitions use fixed
+alarm ordering and explicit hysteresis boundaries. Equality remains active; recovery must cross
+beyond the configured clear boundary.
 
-## Link-event observability
+Fingerprints are reproducibility evidence, **not** signatures, authenticity guarantees,
+authorization controls, or provenance proofs.
 
-New runs emit link-event schema version `2`:
+## Parser assurance
 
-1. one leading `run_metadata` record;
-2. packet, impairment, scheduling, reordering, and forwarding records;
-3. one final `run_summary` for complete runs.
+Normal CI runs deterministic bounded malformed-input tests for:
 
-`run_metadata` records the effective configuration fingerprint and, when used, the profile name, reference, and schema version. Existing packet-event attributes and summary counters remain unchanged. OrbitOps still reads legacy schema-version-1 logs.
+- the binary packet decoder;
+- telemetry recording JSONL;
+- link-event JSONL;
+- alarm-event JSONL;
+- mission-profile TOML;
+- alarm-policy TOML.
 
-Event logs deliberately exclude raw datagram payloads. External profile references and operator-defined session identifiers may still reveal local names or paths and should not contain secrets.
-
-See [`docs/link-event-schema.md`](docs/link-event-schema.md) for the full contract.
+Regression fixtures contain no credentials or private telemetry. Continuous coverage-guided
+fuzzing remains separate from the normal pull-request budget.
 
 ## Engineering quality
 
@@ -249,7 +329,9 @@ make bootstrap
 make verify
 ```
 
-The gate includes Ruff, strict mypy, branch-aware coverage, C++ warnings as errors, C++ tests, cross-language integration, deterministic link integration, the explicit-option demo, the installed profile-driven demo, wheel construction, and packaged profile-resource smoke tests.
+The gate includes Ruff, strict mypy, branch-aware coverage, C++ warnings as errors, C++ tests,
+cross-language integration, deterministic link integration, installed profile and alarm demos,
+wheel construction, package-resource checks, and alarm-event package validation.
 
 ## Repository structure
 
@@ -257,11 +339,13 @@ The gate includes Ruff, strict mypy, branch-aware coverage, C++ warnings as erro
 .
 ├── onboard/                         # C++ simulator and packet encoder
 ├── ground_station/orbitops/         # Python CLI, decoder, receiver, replay
+│   ├── alarm_policies/              # Policy schema, resolver, catalog, resources
+│   ├── alarm_events.py              # Canonical alarm lifecycle JSONL
 │   ├── link/                        # Config, fingerprint, events, runtime, scheduler
-│   └── profiles/                    # Schema, resolver, catalog, and package resources
-├── tests/                           # Unit, compatibility, CLI, and runtime tests
+│   └── profiles/                    # Profile schema, resolver, catalog, resources
+├── tests/                           # Unit, compatibility, parser, CLI, runtime tests
 ├── docs/                            # Architecture, ADRs, operations, security, schemas
-├── scripts/                         # Demos and cross-language integration checks
+├── scripts/                         # Installed demos and package/integration checks
 └── .github/                         # CI, dependency updates, templates, ownership
 ```
 
@@ -269,9 +353,9 @@ The gate includes Ruff, strict mypy, branch-aware coverage, C++ warnings as erro
 
 ### Near term
 
-- configurable alarm policy;
 - command uplink with acknowledgements;
-- parser fuzzing and additional protocol vectors.
+- continuous parser fuzzing infrastructure;
+- packet-family and schema-identifier research.
 
 ### Product experience
 
@@ -282,8 +366,8 @@ The gate includes Ruff, strict mypy, branch-aware coverage, C++ warnings as erro
 
 ### Research track
 
-- packet families and schema identifiers;
-- CCSDS packet-layer research kept separate from the stable custom protocol.
+- CCSDS packet-layer research kept separate from the stable custom protocol;
+- signed run manifests where provenance requirements justify them.
 
 ## Governance and security
 
@@ -294,7 +378,8 @@ The gate includes Ruff, strict mypy, branch-aware coverage, C++ warnings as erro
 - [Changelog](CHANGELOG.md)
 - [Recommended repository settings](docs/repository-settings.md)
 
-Security issues must be reported privately. The current UDP path is unauthenticated and unencrypted; review the [threat model](docs/threat-model.md) before running beyond localhost.
+Security issues must be reported privately. The current UDP path is unauthenticated and
+unencrypted; review the [threat model](docs/threat-model.md) before running beyond localhost.
 
 ## License
 

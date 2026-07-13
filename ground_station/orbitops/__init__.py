@@ -2,7 +2,7 @@
 
 from .protocol import Mode, TelemetryPacket, decode_packet, encode_packet
 
-__version__ = "0.3.0"
+__version__ = "0.4.0"
 
 __all__ = [
     "Mode",
