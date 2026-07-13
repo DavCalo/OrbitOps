@@ -45,10 +45,70 @@ class CliTests(unittest.TestCase):
         with self.assertRaisesRegex(SystemExit, "port must be"):
             main(["listen", "--port", "70000"])
 
-    def test_listen_delegates_to_receiver(self) -> None:
+    def test_listen_delegates_with_default_alarm_metadata(self) -> None:
         with patch("orbitops.cli.listen") as mocked:
             self.assertEqual(main(["listen", "--port", "9010"]), 0)
-        mocked.assert_called_once_with("127.0.0.1", 9010, None, DEFAULT_ALARM_POLICY)
+        mocked.assert_called_once_with(
+            "127.0.0.1",
+            9010,
+            None,
+            DEFAULT_ALARM_POLICY,
+            None,
+            "builtin:standard",
+        )
+
+    def test_listen_delegates_alarm_log_and_selected_policy_reference(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            alarm_log = Path(directory) / "alarms.jsonl"
+            with (
+                patch(
+                    "orbitops.cli.resolve_alarm_policy",
+                    return_value=DEFAULT_ALARM_POLICY,
+                ) as resolve,
+                patch("orbitops.cli.listen") as mocked,
+            ):
+                self.assertEqual(
+                    main(
+                        [
+                            "listen",
+                            "--alarm-policy",
+                            "file:policy.toml",
+                            "--alarm-log",
+                            str(alarm_log),
+                        ]
+                    ),
+                    0,
+                )
+
+        resolve.assert_called_once_with("file:policy.toml")
+        mocked.assert_called_once_with(
+            "127.0.0.1",
+            9000,
+            None,
+            DEFAULT_ALARM_POLICY,
+            alarm_log,
+            "file:policy.toml",
+        )
+
+    def test_invalid_alarm_policy_fails_before_receiver_delegation(self) -> None:
+        with (
+            patch(
+                "orbitops.cli.resolve_alarm_policy",
+                side_effect=ValueError("invalid policy"),
+            ),
+            patch("orbitops.cli.listen") as mocked,
+            self.assertRaisesRegex(SystemExit, "listen failed"),
+        ):
+            main(
+                [
+                    "listen",
+                    "--alarm-policy",
+                    "missing",
+                    "--alarm-log",
+                    "alarms.jsonl",
+                ]
+            )
+        mocked.assert_not_called()
 
     def test_profile_delegates_to_profile_cli(self) -> None:
         with patch("orbitops.cli.run_profile_command", return_value=7) as mocked:

@@ -101,13 +101,27 @@ class AlarmPolicyCliTests(unittest.TestCase):
     def test_listen_without_selection_uses_backward_compatible_default(self) -> None:
         with patch("orbitops.cli.listen") as mocked:
             self.assertEqual(main(["listen"]), 0)
-        mocked.assert_called_once_with("127.0.0.1", 9000, None, DEFAULT_ALARM_POLICY)
+        mocked.assert_called_once_with(
+            "127.0.0.1",
+            9000,
+            None,
+            DEFAULT_ALARM_POLICY,
+            None,
+            "builtin:standard",
+        )
 
     def test_listen_resolves_selected_policy_before_delegating(self) -> None:
         policy = load_builtin_alarm_policy("thermal-demo")
         with patch("orbitops.cli.listen") as mocked:
             self.assertEqual(main(["listen", "--alarm-policy", "thermal-demo"]), 0)
-        mocked.assert_called_once_with("127.0.0.1", 9000, None, policy)
+        mocked.assert_called_once_with(
+            "127.0.0.1",
+            9000,
+            None,
+            policy,
+            None,
+            "thermal-demo",
+        )
 
     def test_invalid_policy_has_no_receiver_or_recording_side_effect(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
