@@ -112,6 +112,19 @@ placement.
 Blank lines are ignored while reading. Unknown keys, unsupported schema versions, malformed
 JSON, mixed sessions, non-contiguous indices, and records after a summary are rejected.
 
+## Compatibility and evolution
+
+Schema version `1` is strict. Required keys and documented attribute meanings are part of the
+compatibility contract. A change that adds required data, changes lifecycle meaning, or alters
+summary semantics requires a new alarm-event schema version.
+
+Human-readable `message` text is operational presentation, not a stable machine identifier.
+Consumers should use `event_type`, `alarm_identity`, `code`, `severity`, and packet sequence for
+automation.
+
+Telemetry recordings, link-event logs, and alarm-event logs do not share schema versions and
+must not be concatenated or interpreted as interchangeable evidence.
+
 ## Data and security boundary
 
 Alarm logs contain decoded operational metadata and human-readable transition messages. They

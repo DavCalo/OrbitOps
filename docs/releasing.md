@@ -9,11 +9,13 @@ OrbitOps uses Semantic Versioning for published technical-preview releases.
 3. Update the CMake project version in `onboard/CMakeLists.txt`.
 4. Move entries from `Unreleased` into a dated `CHANGELOG.md` section.
 5. Review compatibility contracts:
-   - telemetry protocol;
+   - telemetry protocol and telemetry recording;
    - deterministic SplitMix64 decisions;
-   - mission-profile schema and built-in values;
-   - canonical effective-configuration representation and golden fingerprints;
-   - link-event schema and legacy loading.
+   - mission-profile schema, catalog, and effective fingerprints;
+   - link-event schemas and legacy loading;
+   - alarm-policy schema, catalog, and effective fingerprints;
+   - alarm lifecycle identities, hysteresis, and transition ordering;
+   - alarm-event schema, metadata, partial-run handling, and summaries.
 6. Run:
 
    ```bash
@@ -22,42 +24,55 @@ OrbitOps uses Semantic Versioning for published technical-preview releases.
    make verify
    ```
 
-7. Confirm both CLIs report `0.3.0`:
+7. Confirm both CLIs report `0.4.0`:
 
    ```bash
    orbitops --version
    ./build/orbitops_sim --version
    ```
 
-8. Run the supported profile workflow:
+8. Run the supported installed workflows:
 
    ```bash
    make profile-demo
+   make alarm-demo
    ```
 
-9. Confirm the demo uses the installed CLI and validates profile identity, effective fingerprint, packet delivery, and final counters.
-10. Confirm supported Python versions and operating systems match CI.
-11. Review the threat model and retain the explicit non-flight, non-secure, non-CCSDS positioning.
+9. Confirm `make alarm-demo` validates:
+   - installed `orbitops` executable use;
+   - `thermal-demo` policy identity and fingerprint;
+   - warning, critical-update, and SAFE-mode ordering;
+   - cooperative listener shutdown;
+   - final raised, updated, cleared, and total counters.
+10. Build the wheel and run profile, alarm-policy, and alarm-event package checks.
+11. Confirm supported Python versions and operating systems match CI.
+12. Review the threat model and retain explicit non-flight, non-secure, non-RF, and non-CCSDS
+    positioning.
 
-## Compatibility review for v0.3.0
+## Compatibility review for v0.4.0
 
-The v0.3.0 release makes these explicit decisions:
+The v0.4.0 release makes these explicit decisions:
 
-- mission-profile schema version remains `1`;
-- built-in profile names and values become compatibility-sensitive;
-- effective-configuration schema version remains `1`;
-- link-event schema advances from `1` to `2`;
-- new logs begin with `run_metadata`;
-- schema-version-1 logs remain readable and summary-verifiable;
-- packet-event attributes and summary counter names remain unchanged;
-- fingerprints are reproducibility identifiers, not authenticity evidence.
+- binary telemetry protocol remains version `1`;
+- telemetry recording remains record version `1`;
+- mission-profile schema remains version `1`;
+- link-event emission remains schema version `2`, with schema-version-1 reading preserved;
+- alarm-policy schema begins at version `1`;
+- built-in alarm-policy names and behavior-affecting values become compatibility-sensitive;
+- the `standard` policy preserves v0.3 thresholds and zero hysteresis;
+- one logical temperature identity uses `updated` for severity changes;
+- alarm-event schema begins at version `1`;
+- alarm logs require policy-aware metadata and independently verified complete-run summaries;
+- interrupted alarm logs may omit the summary and remain inspectable;
+- telemetry recordings, link events, and alarm events remain separate formats;
+- fingerprints remain reproducibility identifiers, not authenticity evidence.
 
 ## Tag and publish
 
 After the release PR is merged and `main` CI is green:
 
 ```bash
-VERSION=0.3.0
+VERSION=0.4.0
 git tag -a "v${VERSION}" -m "OrbitOps v${VERSION}"
 git push origin "v${VERSION}"
 ```
@@ -66,11 +81,13 @@ Create a GitHub Release from the tag and include:
 
 - changelog summary;
 - supported platforms and Python versions;
-- profile catalog and precedence semantics;
-- event-schema compatibility notes;
-- demo command and expected validation;
-- known security and deployment limitations;
+- mission-profile and alarm-policy catalogs;
+- link and alarm event-schema compatibility notes;
+- `make alarm-demo` and its expected validated transitions;
+- parser-hardening scope and separation from future continuous fuzzing;
+- known security, metadata, and deployment limitations;
 - GitHub-generated source archives;
 - checksums for manually attached artifacts.
 
-Do not label the release as flight-ready, safety-certified, cryptographically secure, an RF model, or CCSDS-compliant.
+Do not label the release as flight-ready, safety-certified, cryptographically secure, an RF
+model, or CCSDS-compliant.

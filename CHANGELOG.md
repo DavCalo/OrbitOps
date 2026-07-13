@@ -6,6 +6,49 @@ All notable changes to OrbitOps are documented here. The project follows Semanti
 
 No unreleased changes yet.
 
+## [0.4.0] - 2026-07-13
+
+### Added
+
+- strict versioned alarm-policy TOML with immutable models and stable effective-policy fingerprints;
+- bundled `standard`, `conservative`, `thermal-demo`, and `power-demo` alarm policies;
+- package-resource and external-file alarm-policy resolution with explicit ambiguity failures;
+- `orbitops alarm-policy list`, `show`, and `validate` commands;
+- `orbitops listen --alarm-policy` with a backward-compatible default policy;
+- session-scoped alarm lifecycle transitions for raised, updated, and cleared states;
+- deterministic hysteresis, stable alarm identities, and defined multi-alarm ordering;
+- canonical alarm-event JSONL with policy metadata, packet sequences, lifecycle details, and verified summaries;
+- `orbitops listen --alarm-log` while keeping telemetry recordings as a separate format;
+- `make alarm-demo`, an installed-CLI thermal scenario validated on Linux and macOS;
+- deterministic malformed-input corpora and bounded parser mutation helpers for every public parser family;
+- architecture, operations, threat-model, schema, parser-hardening, ADR, and release documentation.
+
+### Changed
+
+- alarm output is emitted only on lifecycle transitions instead of repeating unchanged active conditions;
+- temperature escalation and de-escalation preserve one logical identity through `updated` events;
+- the telemetry replay parser now rejects unknown keys, implicit scalar coercion, non-finite values, negative timestamps, and oversized numeric conversions;
+- the complete quality gate now includes the installed alarm demo and alarm-event package smoke test;
+- updated both Python and C++ version reporting to `0.4.0`.
+
+### Compatibility
+
+- the binary telemetry protocol remains version `1`;
+- mission-profile and alarm-policy schemas remain version `1`;
+- link-event emission remains schema version `2`, with schema-version-1 reading preserved;
+- alarm-event schema begins at version `1`;
+- telemetry recordings, link events, and alarm events remain separate contracts;
+- the `standard` alarm policy preserves the effective v0.3 thresholds and zero hysteresis.
+
+### Security
+
+- alarm policies and all imported JSONL/TOML files are treated as untrusted input;
+- alarm logs contain decoded operational metadata, never raw telemetry packet bytes;
+- exact key sets, finite values, ordering, session identity, and summary counters are validated;
+- policy references and operator-selected identifiers are documented as potentially sensitive metadata;
+- fingerprints are explicitly reproducibility evidence, not signatures, MACs, provenance proofs, or authorization controls;
+- parser defects are minimized into deterministic offline regression fixtures before correction.
+
 ## [0.3.0] - 2026-07-12
 
 ### Added

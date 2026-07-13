@@ -1,22 +1,28 @@
 # Architecture
 
-OrbitOps models a compact telemetry path with an on-board producer, a deterministic link boundary, and a ground consumer. Versioned mission profiles now sit before the link boundary as reusable configuration inputs.
+OrbitOps models a compact telemetry path with an on-board producer, deterministic link
+boundary, and ground consumer. Versioned mission profiles configure link behavior while
+versioned alarm policies configure operator-facing lifecycle decisions.
 
 ```mermaid
 flowchart LR
-    PROF[Versioned TOML profile] --> RES[Configuration resolver]
-    CLI[Explicit CLI overrides] --> RES
-    RES --> LINK[Link emulator
+    PROF[Mission-profile TOML] --> LRES[Link configuration resolver]
+    LCLI[Link CLI overrides] --> LRES
+    LRES --> LINK[Deterministic link emulator
 Python]
     SIM[On-board simulator
 C++17] -->|35-byte UDP packet| LINK
     LINK -->|Impaired UDP packet| RX[Ground receiver
 Python]
-    LINK --> EVT[Link-event schema v2
-run metadata + events + summary]
+    LINK --> LEVT[Link-event JSONL
+metadata + events + summary]
+    POL[Alarm-policy TOML] --> PRES[Alarm-policy resolver]
+    PRES --> ALM[Session-scoped alarm engine]
     RX --> DEC[Protocol decoder]
-    DEC --> ALM[Alarm engine]
-    DEC --> REC[Session recorder]
+    DEC --> ALM
+    ALM --> AEVT[Alarm-event JSONL
+policy + lifecycle + summary]
+    DEC --> REC[Telemetry recorder]
     REC --> REP[Deterministic replay]
 ```
 
@@ -32,9 +38,10 @@ Responsibilities:
 - resolve ambiguous references explicitly;
 - return immutable profile and `LinkConfig` models.
 
-Profile documents are data-only. They do not execute code, interpolate environment variables, fetch remote content, or contain credentials.
+Profile documents are data-only. They do not execute code, interpolate environment variables,
+fetch remote content, or contain credentials.
 
-### Configuration resolver
+### Link configuration resolver
 
 The resolver applies:
 
@@ -42,15 +49,28 @@ The resolver applies:
 LinkConfig defaults -> selected profile -> explicit CLI options
 ```
 
-Omitted CLI options preserve profile values. Explicit zero values remain valid overrides. The resolved `LinkConfig` is encoded canonically and fingerprinted before event-log creation or socket construction.
+Omitted CLI options preserve profile values. Explicit zero values remain valid overrides. The
+resolved `LinkConfig` is encoded canonically and fingerprinted before event-log creation or
+socket construction.
 
-The canonical representation and fingerprint are owned by the link configuration layer. `orbitops.profiles` retains compatibility exports for profile callers.
+### Alarm-policy subsystem
+
+Responsibilities:
+
+- parse strict alarm-policy schema version `1`;
+- validate temperature, battery, mode, sequence, and hysteresis semantics;
+- load four built-in policies or explicit local UTF-8 files;
+- reject missing, ambiguous, malformed, and unsupported references before receiver delegation;
+- produce immutable policies and stable fingerprints of behavior-affecting fields.
+
+The `standard` policy preserves the v0.3 effective thresholds and zero hysteresis. Policy
+identity and descriptions do not alter the effective fingerprint.
 
 ### On-board simulator
 
 Responsibilities:
 
-- generate deterministic spacecraft state;
+- generate deterministic nominal, thermal, and power scenarios;
 - encode protocol-version-1 packets;
 - send complete datagrams to one IPv4 destination;
 - optionally inject backwards-compatible transmitter-side packet loss.
@@ -68,16 +88,33 @@ Responsibilities:
 - emit one leading run-metadata record, packet events, and a final summary;
 - close sockets cleanly after finite completion or cooperative stop.
 
-The impairment engine remains pure and independent from sockets. The scheduler consumes immutable outcomes and caller-provided monotonic timestamps.
+The impairment engine remains pure and independent from sockets. The scheduler consumes
+immutable outcomes and caller-provided monotonic timestamps.
 
-### Ground station
+### Ground station and alarm engine
 
 Responsibilities:
 
 - receive and validate datagrams;
 - reject malformed, unsupported, or CRC-invalid packets;
-- present telemetry and alarms;
-- record and replay raw packet sessions.
+- present decoded telemetry;
+- evaluate one ordered stream with a session-scoped `AlarmEngine`;
+- emit only raised, updated, and cleared lifecycle changes;
+- record raw telemetry sessions separately from decoded alarm events.
+
+Stable alarm identities represent temperature, battery, SAFE mode, and sequence-gap
+occurrences. Deterministic ordering is sequence integrity, temperature, battery, then mode.
+
+### Alarm-event recorder
+
+The recorder writes canonical schema-version-1 JSONL:
+
+1. leading policy-aware `run_metadata`;
+2. lifecycle transitions with packet sequence and decision metadata;
+3. a final independently verifiable `run_summary`.
+
+It flushes every event. Cooperative listener shutdown unwinds the recorder context and writes
+the summary. Abrupt termination may leave an inspectable partial log without a summary.
 
 ## Compatibility contracts
 
@@ -86,45 +123,54 @@ OrbitOps maintains separate contracts for:
 1. the 35-byte telemetry protocol;
 2. deterministic SplitMix64 impairment decisions;
 3. mission-profile schema and built-in values;
-4. canonical effective-configuration encoding and fingerprinting;
-5. link-event JSONL.
+4. canonical effective-link encoding and fingerprinting;
+5. link-event JSONL;
+6. alarm-policy schema, catalog, and effective fingerprints;
+7. deterministic alarm lifecycle semantics;
+8. alarm-event JSONL;
+9. telemetry recording and replay JSONL.
 
-Changing one contract does not silently redefine another. Profile metadata does not affect the effective-configuration fingerprint.
+Changing one contract does not silently redefine another. Profile or policy identity metadata
+does not affect the corresponding effective fingerprint.
 
-Link-event schema version `2` adds `run_metadata` while preserving version-1 reading and all existing packet-event and summary-counter meanings.
+Link-event schema version `2` preserves version-1 reading. Alarm-event schema begins at
+version `1`. Telemetry recordings retain record version `1`.
 
 ## Deterministic data flow
 
-For every input datagram, the impairment engine consumes a fixed sequence of six SplitMix64 outputs. The scheduler orders eligible deliveries by deadline, packet index, and copy index.
+For every input datagram, the impairment engine consumes a fixed sequence of six SplitMix64
+outputs. The scheduler orders eligible deliveries by deadline, packet index, and copy index.
 
-The deterministic contract includes configuration resolution, fingerprinting, impairment decisions, and delivery order. It excludes wall-clock timestamps, OS scheduling, ephemeral ports, and automatically generated session identifiers.
+For every decoded packet, the alarm engine evaluates sequence integrity, temperature, battery,
+and mode in a fixed order. Hysteresis equality remains active; recovery must move strictly
+beyond the configured boundary.
+
+The deterministic contract excludes wall-clock timestamps, OS scheduling, ephemeral ports,
+and automatically generated session identifiers.
 
 ## Observability flow
 
-A new run emits:
+Link logs identify the effective link configuration and impairment outcomes. Alarm logs
+identify the effective policy and lifecycle outcomes. Complete logs are accepted only when
+their final summaries match independently recomputed counters.
 
-1. `run_metadata` with profile identity and effective-configuration fingerprint;
-2. receive and selected impairment records;
-3. one scheduling record per delivery;
-4. observed reorder records;
-5. successful forwarding records;
-6. final `run_summary`.
-
-Statistics remain derived only from packet and delivery events. Complete logs are valid only when the final summary matches an independent recomputation.
+Raw datagram payloads are excluded from both observability logs. Raw telemetry is persisted
+only through the separate session recorder.
 
 ## Design decisions
 
-- Runtime dependencies remain limited to the Python standard library and platform networking APIs.
+- Runtime dependencies remain limited to the Python standard library and platform APIs.
 - UDP keeps datagram boundaries and impairment behavior explicit.
-- Ground telemetry recordings and link-event logs remain separate formats.
-- Built-in profiles are reproducible examples and fixtures, not RF-channel models.
-- SHA-256 fingerprints identify equivalent effective configurations but do not authenticate them.
+- Telemetry, link-event, and alarm-event logs remain separate formats.
+- Built-in profiles and policies are deterministic examples and fixtures, not certified limits.
+- SHA-256 fingerprints identify equivalent effective behavior but do not authenticate it.
+- Strict parser corpora remain bounded and offline in normal CI.
 - OrbitOps remains a development simulator, not flight software.
 
 ## Extension points
 
-- configurable alarm policy;
 - command uplink and acknowledgements;
+- continuous coverage-guided fuzzing outside the normal pull-request budget;
 - event sink adapters for OpenTelemetry or Datadog;
 - terminal or web mission timeline;
 - signed run manifests where provenance is justified;
