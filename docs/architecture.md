@@ -116,6 +116,12 @@ The recorder writes canonical schema-version-1 JSONL:
 It flushes every event. Cooperative listener shutdown unwinds the recorder context and writes
 the summary. Abrupt termination may leave an inspectable partial log without a summary.
 
+### Session inspection boundary
+
+The v0.5 inspector consumes telemetry recordings, link events, and alarm events through their existing strict validators. It does not merge their schemas or claim a shared run identity. Telemetry and alarm transitions may correlate by a unique decoded packet sequence; link events remain a separate lane because `packet_index` is not telemetry `packet_sequence`. Process-local elapsed clocks and unsynchronized wall clocks are never combined into a fabricated global timeline.
+
+Source-local order remains authoritative. Cross-lane precedence is deterministic presentation only, not causal or temporal evidence. See [ADR 0005](adr/0005-session-correlation-semantics.md).
+
 ## Compatibility contracts
 
 OrbitOps maintains separate contracts for:
@@ -128,7 +134,8 @@ OrbitOps maintains separate contracts for:
 6. alarm-policy schema, catalog, and effective fingerprints;
 7. deterministic alarm lifecycle semantics;
 8. alarm-event JSONL;
-9. telemetry recording and replay JSONL.
+9. telemetry recording and replay JSONL;
+10. unified session-correlation semantics.
 
 Changing one contract does not silently redefine another. Profile or policy identity metadata
 does not affect the corresponding effective fingerprint.
@@ -156,6 +163,10 @@ their final summaries match independently recomputed counters.
 
 Raw datagram payloads are excluded from both observability logs. Raw telemetry is persisted
 only through the separate session recorder.
+
+Unified inspection treats selected files as an operator-provided evidence bundle. A unique
+telemetry/alarm packet-sequence match is exact at the field level, while bundle provenance
+remains unverified. Link and alarm session identifiers use independent namespaces.
 
 ## Design decisions
 
