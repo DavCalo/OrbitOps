@@ -6,6 +6,7 @@ import json
 import math
 import time
 from collections.abc import Iterator
+from dataclasses import dataclass
 from pathlib import Path
 from typing import cast
 
@@ -14,7 +15,7 @@ _RECORD_KEYS = frozenset({"packet_hex", "received_at", "record_version"})
 
 
 def _validate_timestamp(value: object, *, field: str) -> float:
-    if isinstance(value, bool) or not isinstance(value, (int, float)):
+    if isinstance(value, bool) or not isinstance(value, int | float):
         raise TypeError(f"{field} must be a real number")
     try:
         timestamp = float(value)
@@ -59,6 +60,57 @@ def _decode_record(payload: object, *, line_number: int) -> tuple[float, bytes]:
     return timestamp, packet
 
 
+@dataclass(frozen=True, slots=True)
+class RecordedTelemetryRecord:
+    """One validated telemetry-recording row without replay timing behavior."""
+
+    record_index: int
+    line_number: int
+    received_at: float
+    packet: bytes
+
+    def __post_init__(self) -> None:
+        if isinstance(self.record_index, bool) or not isinstance(self.record_index, int):
+            raise TypeError("record_index must be an integer")
+        if self.record_index < 0:
+            raise ValueError("record_index must be non-negative")
+        if isinstance(self.line_number, bool) or not isinstance(self.line_number, int):
+            raise TypeError("line_number must be an integer")
+        if self.line_number <= 0:
+            raise ValueError("line_number must be positive")
+        timestamp = _validate_timestamp(self.received_at, field="received_at")
+        object.__setattr__(self, "received_at", timestamp)
+        if not isinstance(self.packet, bytes):
+            raise TypeError("packet must be bytes")
+
+
+def _iter_decoded_records(path: Path) -> Iterator[RecordedTelemetryRecord]:
+    record_index = 0
+    with path.open("r", encoding="utf-8") as handle:
+        for line_number, line in enumerate(handle, start=1):
+            if not line.strip():
+                continue
+            try:
+                payload: object = json.loads(line)
+            except json.JSONDecodeError as exc:
+                raise ValueError(f"invalid record at line {line_number}") from exc
+
+            timestamp, packet = _decode_record(payload, line_number=line_number)
+            yield RecordedTelemetryRecord(
+                record_index=record_index,
+                line_number=line_number,
+                received_at=timestamp,
+                packet=packet,
+            )
+            record_index += 1
+
+
+def load_telemetry_records(path: Path) -> tuple[RecordedTelemetryRecord, ...]:
+    """Load a telemetry recording strictly without replay sleeps."""
+
+    return tuple(_iter_decoded_records(path))
+
+
 class SessionRecorder:
     """Write a deterministic, line-delimited telemetry capture.
 
@@ -94,7 +146,7 @@ class SessionRecorder:
 
 
 def iter_records(path: Path, speed: float = 1.0) -> Iterator[bytes]:
-    if isinstance(speed, bool) or not isinstance(speed, (int, float)):
+    if isinstance(speed, bool) or not isinstance(speed, int | float):
         raise TypeError("speed must be a real number")
     try:
         normalized_speed = float(speed)
@@ -104,18 +156,9 @@ def iter_records(path: Path, speed: float = 1.0) -> Iterator[bytes]:
         raise ValueError("speed must be positive and finite")
 
     previous_time: float | None = None
-    with path.open("r", encoding="utf-8") as handle:
-        for line_number, line in enumerate(handle, start=1):
-            if not line.strip():
-                continue
-            try:
-                payload: object = json.loads(line)
-            except json.JSONDecodeError as exc:
-                raise ValueError(f"invalid record at line {line_number}") from exc
-
-            timestamp, packet = _decode_record(payload, line_number=line_number)
-            if previous_time is not None:
-                delay = max(0.0, timestamp - previous_time) / normalized_speed
-                time.sleep(delay)
-            previous_time = timestamp
-            yield packet
+    for record in _iter_decoded_records(path):
+        if previous_time is not None:
+            delay = max(0.0, record.received_at - previous_time) / normalized_speed
+            time.sleep(delay)
+        previous_time = record.received_at
+        yield record.packet
