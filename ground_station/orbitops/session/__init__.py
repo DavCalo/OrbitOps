@@ -16,6 +16,23 @@ from .correlation import (
     correlation_rule,
     presentation_key,
 )
+from .errors import (
+    IncompatibleEvidenceError,
+    IncompleteEvidenceError,
+    MalformedEvidenceError,
+    SessionInspectionError,
+)
+from .inspection import inspect_session
+from .models import (
+    Diagnostic,
+    DiagnosticCode,
+    DiagnosticSeverity,
+    LaneSummary,
+    NormalizedSession,
+    SourceDescriptor,
+    TimelineEntry,
+    TimelineEntryKind,
+)
 
 __all__ = [
     "CONTRACT_SEMANTICS",
@@ -26,10 +43,23 @@ __all__ = [
     "CorrelationDecision",
     "CorrelationKind",
     "CorrelationRule",
+    "Diagnostic",
+    "DiagnosticCode",
+    "DiagnosticSeverity",
     "EvidenceLane",
+    "IncompatibleEvidenceError",
+    "IncompleteEvidenceError",
+    "LaneSummary",
+    "MalformedEvidenceError",
+    "NormalizedSession",
+    "SessionInspectionError",
     "SourceCompleteness",
+    "SourceDescriptor",
+    "TimelineEntry",
+    "TimelineEntryKind",
     "classify_source_completeness",
     "classify_telemetry_alarm_match",
     "correlation_rule",
+    "inspect_session",
     "presentation_key",
 ]
