@@ -481,6 +481,37 @@ class SessionInspectionTests(unittest.TestCase):
             session.sources[2].source.session_id,
         )
 
+    def test_optional_sources_remain_explicitly_incomplete(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            telemetry, _, _ = self.paths(directory)
+            _write_telemetry(telemetry, (_packet(4),))
+
+            session = inspect_session(telemetry_path=telemetry)
+
+        self.assertFalse(session.is_complete)
+        self.assertTrue(session.is_compatible)
+        self.assertEqual(
+            [summary.source.source_name for summary in session.sources],
+            ["telemetry.jsonl", "<not provided>", "<not provided>"],
+        )
+        self.assertEqual(
+            [diagnostic.code for diagnostic in session.diagnostics],
+            [
+                DiagnosticCode.SOURCE_NOT_PROVIDED,
+                DiagnosticCode.SOURCE_NOT_PROVIDED,
+            ],
+        )
+
+    def test_at_least_one_evidence_source_is_required(self) -> None:
+        with self.assertRaisesRegex(ValueError, "at least one evidence source"):
+            inspect_session()
+
+    def test_filesystem_failures_are_not_misclassified_as_malformed(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            missing = Path(directory) / "missing-telemetry.jsonl"
+            with self.assertRaises(FileNotFoundError):
+                inspect_session(telemetry_path=missing)
+
 
 if __name__ == "__main__":
     unittest.main()

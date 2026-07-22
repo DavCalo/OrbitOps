@@ -14,6 +14,7 @@ from .profiles.cli import configure_profile_parser, run_profile_command
 from .protocol import ProtocolError, decode_packet
 from .receiver import listen, process_packet
 from .recorder import iter_records
+from .session.cli import configure_session_parser, run_session_command
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -66,6 +67,12 @@ def build_parser() -> argparse.ArgumentParser:
     )
     configure_alarm_policy_parser(alarm_policy_parser)
 
+    session_parser = subparsers.add_parser(
+        "session",
+        help="inspect normalized session evidence",
+    )
+    configure_session_parser(session_parser)
+
     replay_parser = subparsers.add_parser("replay", help="replay a JSONL session")
     replay_parser.add_argument("path", type=Path)
     replay_parser.add_argument("--speed", type=float, default=1.0)
@@ -113,6 +120,9 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.command == "alarm-policy":
         return run_alarm_policy_command(args)
+
+    if args.command == "session":
+        return run_session_command(args)
 
     if args.command == "replay":
         if args.speed <= 0:

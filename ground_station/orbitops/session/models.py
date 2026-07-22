@@ -59,6 +59,7 @@ class DiagnosticCode(StrEnum):
     """Stable machine-readable diagnostic identifiers."""
 
     SOURCE_EMPTY = "source_empty"
+    SOURCE_NOT_PROVIDED = "source_not_provided"
     SOURCE_INCOMPLETE = "source_incomplete"
     SOURCE_SUMMARY_MISSING = "source_summary_missing"
     TELEMETRY_PACKET_REJECTED = "telemetry_packet_rejected"

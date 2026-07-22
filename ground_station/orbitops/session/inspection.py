@@ -49,9 +49,11 @@ _LINK_CONTEXT_TYPES = frozenset(
 )
 
 
-def _require_path(name: str, value: object) -> Path:
+def _require_optional_path(name: str, value: object) -> Path | None:
+    if value is None:
+        return None
     if not isinstance(value, Path):
-        raise TypeError(f"{name} must be a pathlib.Path")
+        raise TypeError(f"{name} must be a pathlib.Path or None")
     return value
 
 
@@ -66,7 +68,7 @@ def _load_strict(
 ) -> tuple[_SourceItem, ...]:
     try:
         return loader(path)
-    except (OSError, TypeError, ValueError) as exc:
+    except (TypeError, ValueError) as exc:
         raise MalformedEvidenceError(
             f"invalid {lane.value} evidence in {_source_name(path)!r}: {exc}",
             lane=lane,
@@ -477,65 +479,128 @@ def _normalize_link(
     return summary, timeline, diagnostics
 
 
+def _missing_lane_summary(lane: EvidenceLane) -> tuple[LaneSummary, Diagnostic]:
+    if lane is EvidenceLane.TELEMETRY:
+        completeness = classify_source_completeness(lane, 0)
+        counters = {
+            "records_total": 0,
+            "packets_decoded": 0,
+            "packets_rejected": 0,
+            "sequence_gaps": 0,
+            "sequence_duplicates": 0,
+        }
+    elif lane is EvidenceLane.ALARM:
+        completeness = classify_source_completeness(lane, 0, summary_present=False)
+        statistics = alarm_event_contract.statistics_from_events(())
+        counters = {
+            "transitions_raised": statistics.transitions_raised,
+            "transitions_updated": statistics.transitions_updated,
+            "transitions_cleared": statistics.transitions_cleared,
+            "transitions_total": statistics.transitions_total,
+        }
+    else:
+        completeness = classify_source_completeness(lane, 0, summary_present=False)
+        counters = link_statistics_contract.statistics_from_events(()).to_dict()
+
+    summary = LaneSummary(
+        SourceDescriptor(
+            lane,
+            "<not provided>",
+            0,
+            completeness,
+        ),
+        summary_present=False,
+        counters=counters,
+    )
+    diagnostic = Diagnostic(
+        DiagnosticCode.SOURCE_NOT_PROVIDED,
+        DiagnosticSeverity.WARNING,
+        f"{lane.value} evidence source was not provided",
+        lane=lane,
+    )
+    return summary, diagnostic
+
+
 def inspect_session(
     *,
-    telemetry_path: Path,
-    link_events_path: Path,
-    alarm_events_path: Path,
+    telemetry_path: Path | None = None,
+    link_events_path: Path | None = None,
+    alarm_events_path: Path | None = None,
 ) -> NormalizedSession:
-    """Build one deterministic normalized session from three strict evidence sources.
+    """Build one deterministic normalized session from selected evidence sources.
 
-    The returned model keeps source-local clocks and ordering separate. Malformed
-    files raise :class:`MalformedEvidenceError`; structurally valid partial or
-    ambiguous evidence remains inspectable through diagnostics and model state.
+    Each input is optional, but at least one source must be selected. Missing lanes
+    remain explicit and incomplete in the normalized model. Malformed source content
+    raises :class:`MalformedEvidenceError`; filesystem failures remain ``OSError``
+    instances so callers can distinguish input/output failures from malformed data.
     """
 
-    telemetry = _require_path("telemetry_path", telemetry_path)
-    link = _require_path("link_events_path", link_events_path)
-    alarm = _require_path("alarm_events_path", alarm_events_path)
+    telemetry = _require_optional_path("telemetry_path", telemetry_path)
+    link = _require_optional_path("link_events_path", link_events_path)
+    alarm = _require_optional_path("alarm_events_path", alarm_events_path)
+    if telemetry is None and link is None and alarm is None:
+        raise ValueError("at least one evidence source must be provided")
 
-    telemetry_records = _load_strict(
-        EvidenceLane.TELEMETRY,
-        telemetry,
-        load_telemetry_records,
-    )
-    alarm_records = _load_strict(
-        EvidenceLane.ALARM,
-        alarm,
-        alarm_event_contract.load_alarm_events,
-    )
-    link_records = _load_strict(
-        EvidenceLane.LINK,
-        link,
-        link_event_contract.load_link_events,
-    )
-    if (
-        link_records
-        and link_records[-1].event_type is link_event_contract.LinkEventType.RUN_SUMMARY
-    ):
-        try:
-            link_statistics_contract.validate_run_summary(link_records)
-        except (TypeError, ValueError) as exc:
-            raise MalformedEvidenceError(
-                f"invalid link evidence in {_source_name(link)!r}: {exc}",
-                lane=EvidenceLane.LINK,
-                source_name=str(link),
-            ) from exc
+    if telemetry is None:
+        telemetry_summary, telemetry_missing = _missing_lane_summary(EvidenceLane.TELEMETRY)
+        telemetry_timeline: list[TimelineEntry] = []
+        telemetry_diagnostics = [telemetry_missing]
+        decoded_sequences: tuple[int, ...] = ()
+        decoded_source_indices: tuple[int, ...] = ()
+    else:
+        telemetry_records = _load_strict(
+            EvidenceLane.TELEMETRY,
+            telemetry,
+            load_telemetry_records,
+        )
+        (
+            telemetry_summary,
+            telemetry_timeline,
+            telemetry_diagnostics,
+            decoded_sequences,
+            decoded_source_indices,
+        ) = _normalize_telemetry(telemetry, telemetry_records)
 
-    (
-        telemetry_summary,
-        telemetry_timeline,
-        telemetry_diagnostics,
-        decoded_sequences,
-        decoded_source_indices,
-    ) = _normalize_telemetry(telemetry, telemetry_records)
-    alarm_summary, alarm_timeline, alarm_diagnostics = _normalize_alarm(
-        alarm,
-        alarm_records,
-        decoded_sequences,
-        decoded_source_indices,
-    )
-    link_summary, link_timeline, link_diagnostics = _normalize_link(link, link_records)
+    if alarm is None:
+        alarm_summary, alarm_missing = _missing_lane_summary(EvidenceLane.ALARM)
+        alarm_timeline: list[TimelineEntry] = []
+        alarm_diagnostics = [alarm_missing]
+    else:
+        alarm_records = _load_strict(
+            EvidenceLane.ALARM,
+            alarm,
+            alarm_event_contract.load_alarm_events,
+        )
+        alarm_summary, alarm_timeline, alarm_diagnostics = _normalize_alarm(
+            alarm,
+            alarm_records,
+            decoded_sequences,
+            decoded_source_indices,
+        )
+
+    if link is None:
+        link_summary, link_missing = _missing_lane_summary(EvidenceLane.LINK)
+        link_timeline: list[TimelineEntry] = []
+        link_diagnostics = [link_missing]
+    else:
+        link_records = _load_strict(
+            EvidenceLane.LINK,
+            link,
+            link_event_contract.load_link_events,
+        )
+        if (
+            link_records
+            and link_records[-1].event_type is link_event_contract.LinkEventType.RUN_SUMMARY
+        ):
+            try:
+                link_statistics_contract.validate_run_summary(link_records)
+            except (TypeError, ValueError) as exc:
+                raise MalformedEvidenceError(
+                    f"invalid link evidence in {_source_name(link)!r}: {exc}",
+                    lane=EvidenceLane.LINK,
+                    source_name=str(link),
+                ) from exc
+        link_summary, link_timeline, link_diagnostics = _normalize_link(link, link_records)
 
     timeline = tuple(
         sorted(
