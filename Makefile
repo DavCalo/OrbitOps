@@ -53,6 +53,7 @@ package:
 	$(PYTHON) scripts/profile_package_check.py
 	$(PYTHON) scripts/alarm_policy_package_check.py
 	$(PYTHON) scripts/alarm_event_package_check.py
+	$(PYTHON) scripts/session_inspection_package_check.py
 
 verify: quality test integration package
 

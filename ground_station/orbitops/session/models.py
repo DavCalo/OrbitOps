@@ -59,6 +59,7 @@ class DiagnosticCode(StrEnum):
     """Stable machine-readable diagnostic identifiers."""
 
     SOURCE_EMPTY = "source_empty"
+    SOURCE_NOT_PROVIDED = "source_not_provided"
     SOURCE_INCOMPLETE = "source_incomplete"
     SOURCE_SUMMARY_MISSING = "source_summary_missing"
     TELEMETRY_PACKET_REJECTED = "telemetry_packet_rejected"
@@ -68,6 +69,7 @@ class DiagnosticCode(StrEnum):
     ALARM_CORRELATION_IMPOSSIBLE = "alarm_correlation_impossible"
     LINK_CORRUPTION_OBSERVED = "link_corruption_observed"
     METADATA_MISMATCH = "metadata_mismatch"
+    TIMELINE_TRUNCATED = "timeline_truncated"
 
 
 def _validate_non_negative_int(name: str, value: object) -> int:
