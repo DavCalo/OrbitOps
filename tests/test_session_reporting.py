@@ -25,6 +25,7 @@ from orbitops.session.reporting import (
     REPORT_FORMAT,
     REPORT_FORMAT_VERSION,
     SessionReport,
+    project_session_report,
     render_session_report_json,
     render_session_report_text,
     session_report_document,
@@ -251,6 +252,65 @@ class SessionReportingTests(unittest.TestCase):
         self.assertEqual(document["selection"]["timeline_entries_rendered"], 2)
         self.assertEqual(document["selection"]["timeline_entries_total"], 4)
         self.assertEqual(document["sources"][0]["counters"]["records_total"], 2)
+
+    def test_sequence_filters_preserve_unfiltered_source_counters(self) -> None:
+        session = sample_session()
+        report = project_session_report(
+            session,
+            packet_sequence_min=11,
+            packet_sequence_max=11,
+        )
+        document = session_report_document(report)
+
+        self.assertEqual(
+            [(entry.lane, entry.source_index) for entry in report.timeline],
+            [(EvidenceLane.TELEMETRY, 1), (EvidenceLane.ALARM, 1)],
+        )
+        self.assertEqual(document["selection"]["timeline_entries_total"], 4)
+        self.assertEqual(document["selection"]["timeline_entries_rendered"], 2)
+        self.assertEqual(document["sources"][0]["counters"]["records_total"], 2)
+        self.assertEqual(
+            document["selection"]["filters"],
+            {"packet_sequence_max": 11, "packet_sequence_min": 11},
+        )
+
+    def test_alarm_filters_are_exact_and_exclude_other_lanes(self) -> None:
+        report = project_session_report(
+            sample_session(),
+            alarm_code="TEMP_HIGH",
+            alarm_severity="warning",
+        )
+
+        self.assertEqual(len(report.timeline), 1)
+        self.assertEqual(report.timeline[0].lane, EvidenceLane.ALARM)
+        self.assertEqual(report.timeline[0].attributes["code"], "TEMP_HIGH")
+
+    def test_event_limit_is_explicit_without_changing_session_status(self) -> None:
+        report = project_session_report(sample_session(), event_limit=1)
+        document = session_report_document(report)
+
+        self.assertTrue(report.truncated)
+        self.assertEqual(len(report.timeline), 1)
+        self.assertEqual(document["summary"]["timeline_entries_total"], 4)
+        self.assertEqual(document["summary"]["compatible"], True)
+        truncation = next(
+            item for item in report.diagnostics if item.code is DiagnosticCode.TIMELINE_TRUNCATED
+        )
+        self.assertEqual(truncation.severity, DiagnosticSeverity.INFO)
+        self.assertIn("1 of 4 matching entries", truncation.message)
+
+    def test_filter_validation_is_bounded(self) -> None:
+        session = sample_session()
+        with self.assertRaisesRegex(ValueError, "must not exceed"):
+            project_session_report(
+                session,
+                packet_sequence_min=12,
+                packet_sequence_max=11,
+            )
+        with self.assertRaisesRegex(ValueError, "event_limit"):
+            project_session_report(session, event_limit=0)
+        with self.assertRaisesRegex(ValueError, "alarm_severity"):
+            project_session_report(session, alarm_severity="unknown")
 
     def test_report_projection_is_immutable_and_validated(self) -> None:
         session = sample_session()

@@ -34,20 +34,25 @@ from .models import (
     TimelineEntryKind,
 )
 from .reporting import (
+    ALARM_SEVERITY_CHOICES,
     EVIDENCE_BUNDLE_KIND,
+    MAX_REPORT_EVENTS,
     REPORT_FORMAT,
     REPORT_FORMAT_VERSION,
     SessionReport,
     SessionReportDocument,
+    project_session_report,
     render_session_report_json,
     render_session_report_text,
     session_report_document,
 )
 
 __all__ = [
+    "ALARM_SEVERITY_CHOICES",
     "CONTRACT_SEMANTICS",
     "EVIDENCE_BUNDLE_KIND",
     "LANE_PRECEDENCE",
+    "MAX_REPORT_EVENTS",
     "PAIR_CORRELATION_RULES",
     "REPORT_FORMAT",
     "REPORT_FORMAT_VERSION",
@@ -77,6 +82,7 @@ __all__ = [
     "correlation_rule",
     "inspect_session",
     "presentation_key",
+    "project_session_report",
     "render_session_report_json",
     "render_session_report_text",
     "session_report_document",

@@ -69,6 +69,7 @@ class DiagnosticCode(StrEnum):
     ALARM_CORRELATION_IMPOSSIBLE = "alarm_correlation_impossible"
     LINK_CORRUPTION_OBSERVED = "link_corruption_observed"
     METADATA_MISMATCH = "metadata_mismatch"
+    TIMELINE_TRUNCATED = "timeline_truncated"
 
 
 def _validate_non_negative_int(name: str, value: object) -> int:

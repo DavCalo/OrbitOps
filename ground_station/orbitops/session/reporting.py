@@ -9,9 +9,10 @@ from dataclasses import dataclass, field
 from types import MappingProxyType
 from typing import TypeAlias, TypedDict
 
-from .correlation import CorrelationDecision, SourceCompleteness
+from .correlation import CorrelationDecision, EvidenceLane, SourceCompleteness
 from .models import (
     Diagnostic,
+    DiagnosticCode,
     DiagnosticSeverity,
     LaneSummary,
     NormalizedSession,
@@ -21,6 +22,9 @@ from .models import (
 REPORT_FORMAT = "orbitops.session_report"
 REPORT_FORMAT_VERSION = 1
 EVIDENCE_BUNDLE_KIND = "operator_selected"
+MAX_REPORT_EVENTS = 10_000
+ALARM_SEVERITY_CHOICES = ("warning", "critical")
+_MAX_PACKET_SEQUENCE = 0xFFFFFFFF
 
 JsonScalar: TypeAlias = str | int | float | bool | None
 ImmutableFilters: TypeAlias = Mapping[str, JsonScalar]
@@ -184,6 +188,152 @@ class SessionReport:
             diagnostics=session.diagnostics,
             timeline_total=len(session.timeline),
         )
+
+
+def _validate_packet_sequence_filter(name: str, value: object) -> int | None:
+    if value is None:
+        return None
+    if isinstance(value, bool) or not isinstance(value, int):
+        raise TypeError(f"{name} must be an integer or None")
+    if not 0 <= value <= _MAX_PACKET_SEQUENCE:
+        raise ValueError(f"{name} must fit an unsigned 32-bit integer")
+    return value
+
+
+def _validate_alarm_code(value: object) -> str | None:
+    if value is None:
+        return None
+    if not isinstance(value, str):
+        raise TypeError("alarm_code must be a string or None")
+    normalized = value.strip()
+    if not normalized:
+        raise ValueError("alarm_code must be non-empty")
+    if "\x00" in normalized:
+        raise ValueError("alarm_code must not contain NUL characters")
+    return normalized
+
+
+def _validate_alarm_severity(value: object) -> str | None:
+    if value is None:
+        return None
+    if not isinstance(value, str):
+        raise TypeError("alarm_severity must be a string or None")
+    if value not in ALARM_SEVERITY_CHOICES:
+        choices = ", ".join(ALARM_SEVERITY_CHOICES)
+        raise ValueError(f"alarm_severity must be one of: {choices}")
+    return value
+
+
+def _validate_event_limit(value: object) -> int | None:
+    if value is None:
+        return None
+    if isinstance(value, bool) or not isinstance(value, int):
+        raise TypeError("event_limit must be an integer or None")
+    if not 1 <= value <= MAX_REPORT_EVENTS:
+        raise ValueError(f"event_limit must be between 1 and {MAX_REPORT_EVENTS}")
+    return value
+
+
+def _matches_timeline_filters(
+    entry: TimelineEntry,
+    *,
+    packet_sequence_min: int | None,
+    packet_sequence_max: int | None,
+    alarm_code: str | None,
+    alarm_severity: str | None,
+) -> bool:
+    if packet_sequence_min is not None or packet_sequence_max is not None:
+        if entry.packet_sequence is None:
+            return False
+        if packet_sequence_min is not None and entry.packet_sequence < packet_sequence_min:
+            return False
+        if packet_sequence_max is not None and entry.packet_sequence > packet_sequence_max:
+            return False
+
+    if alarm_code is not None or alarm_severity is not None:
+        if entry.lane is not EvidenceLane.ALARM:
+            return False
+        if alarm_code is not None and entry.attributes.get("code") != alarm_code:
+            return False
+        if alarm_severity is not None and entry.attributes.get("severity") != alarm_severity:
+            return False
+
+    return True
+
+
+def project_session_report(
+    session: NormalizedSession,
+    *,
+    packet_sequence_min: int | None = None,
+    packet_sequence_max: int | None = None,
+    alarm_code: str | None = None,
+    alarm_severity: str | None = None,
+    event_limit: int | None = None,
+) -> SessionReport:
+    """Build a deterministic filtered report without changing session-wide totals.
+
+    Active filters combine with logical AND. Packet-sequence filters retain only
+    entries that carry a telemetry packet sequence. Alarm filters retain only alarm
+    transitions whose normalized attributes match exactly. The event limit is applied
+    last, after filtering and stable timeline ordering.
+    """
+
+    if not isinstance(session, NormalizedSession):
+        raise TypeError("session must be a NormalizedSession")
+    sequence_min = _validate_packet_sequence_filter("packet_sequence_min", packet_sequence_min)
+    sequence_max = _validate_packet_sequence_filter("packet_sequence_max", packet_sequence_max)
+    if sequence_min is not None and sequence_max is not None and sequence_min > sequence_max:
+        raise ValueError("packet_sequence_min must not exceed packet_sequence_max")
+    code = _validate_alarm_code(alarm_code)
+    severity = _validate_alarm_severity(alarm_severity)
+    limit = _validate_event_limit(event_limit)
+
+    matched = tuple(
+        entry
+        for entry in session.timeline
+        if _matches_timeline_filters(
+            entry,
+            packet_sequence_min=sequence_min,
+            packet_sequence_max=sequence_max,
+            alarm_code=code,
+            alarm_severity=severity,
+        )
+    )
+    truncated = limit is not None and len(matched) > limit
+    timeline = matched if limit is None else matched[:limit]
+
+    diagnostics = list(session.diagnostics)
+    if truncated:
+        diagnostics.append(
+            Diagnostic(
+                DiagnosticCode.TIMELINE_TRUNCATED,
+                DiagnosticSeverity.INFO,
+                (
+                    f"timeline rendering limited to {limit} of {len(matched)} matching "
+                    f"entries; normalized session contains {len(session.timeline)} entries"
+                ),
+            )
+        )
+
+    filters: dict[str, JsonScalar] = {}
+    for name, value in (
+        ("alarm_code", code),
+        ("alarm_severity", severity),
+        ("event_limit", limit),
+        ("packet_sequence_max", sequence_max),
+        ("packet_sequence_min", sequence_min),
+    ):
+        if value is not None:
+            filters[name] = value
+
+    return SessionReport(
+        session=session,
+        timeline=timeline,
+        diagnostics=tuple(sorted(diagnostics, key=lambda item: item.sort_key)),
+        timeline_total=len(session.timeline),
+        filters=filters,
+        truncated=truncated,
+    )
 
 
 def _sorted_mapping(values: Mapping[str, JsonScalar]) -> dict[str, JsonScalar]:
