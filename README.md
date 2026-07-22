@@ -22,7 +22,8 @@
 OrbitOps makes an end-to-end telemetry path concrete. A C++ on-board simulator emits
 fixed-width binary packets; a deterministic UDP link emulator applies reproducible network
 impairments; a Python ground station validates, decodes, alarms, records, and replays the
-resulting telemetry.
+resulting telemetry. A unified session inspector then produces deterministic operator text and
+versioned JSON reports from the independently validated telemetry, link, and alarm evidence.
 
 Versioned TOML mission profiles make link scenarios reusable. Versioned alarm policies make
 thresholds and hysteresis explicit. Link and alarm logs begin with the effective configuration
@@ -45,6 +46,7 @@ or policy identity and a SHA-256 fingerprint of behavior-affecting values.
 | Link emulation | Seeded loss, latency, jitter, duplication, corruption, and bounded reordering |
 | Alarm lifecycle | Session-scoped raised, updated, and cleared transitions with stable identities |
 | Observability | Separate link-event and alarm-event JSONL with metadata and verified summaries |
+| Session inspection | Deterministic text and versioned JSON reports with explicit diagnostics, filters, and exit codes |
 | Parser assurance | Bounded deterministic mutations and malformed-input corpora for every public parser |
 | Quality gates | Linux/macOS builds, Python compatibility, coverage, typing, sanitizers, packaging, and installed demos |
 | Runtime dependencies | Python standard library and platform networking APIs only |
@@ -133,6 +135,34 @@ The installed mission-profile workflow remains available as:
 ```bash
 make profile-demo
 ```
+
+## Session-inspection workflow
+
+Inspect any supported combination of telemetry, link-event, and alarm-event evidence:
+
+```bash
+orbitops session inspect \
+  --telemetry sessions/mission-telemetry.jsonl \
+  --link-events sessions/mission-link-events.jsonl \
+  --alarm-events sessions/mission-alarms.jsonl
+```
+
+The default text report preserves source-local ordering and clock domains. Use deterministic,
+versioned JSON for automation:
+
+```bash
+orbitops session inspect \
+  --telemetry sessions/mission-telemetry.jsonl \
+  --link-events sessions/mission-link-events.jsonl \
+  --alarm-events sessions/mission-alarms.jsonl \
+  --format json \
+  --output sessions/mission-report.json
+```
+
+Filters restrict rendered timeline entries without changing whole-session counters. Supported
+filters cover packet-sequence bounds, exact alarm code, alarm severity, and an explicit event
+limit. See the [session-inspection contract](docs/session-inspection.md) for report semantics,
+atomic output behavior, compatibility boundaries, and exit codes.
 
 ## Alarm-policy workflow
 
@@ -282,6 +312,16 @@ orbitops listen [--host HOST] [--port PORT]
                 [--alarm-policy REFERENCE]
                 [--alarm-log PATH]
 
+orbitops session inspect
+                         [--telemetry PATH]
+                         [--link-events PATH]
+                         [--alarm-events PATH]
+                         [--format text|json]
+                         [--sequence-min N] [--sequence-max N]
+                         [--alarm-code CODE]
+                         [--alarm-severity warning|critical]
+                         [--limit N] [--output PATH]
+
 orbitops replay PATH [--speed FACTOR]
 orbitops decode PACKET_HEX
 orbitops --version
@@ -331,7 +371,8 @@ make verify
 
 The gate includes Ruff, strict mypy, branch-aware coverage, C++ warnings as errors, C++ tests,
 cross-language integration, deterministic link integration, installed profile and alarm demos,
-wheel construction, package-resource checks, and alarm-event package validation.
+wheel construction, package-resource checks, alarm-event validation, and the installed
+session-inspection workflow.
 
 ## Repository structure
 
@@ -342,7 +383,8 @@ wheel construction, package-resource checks, and alarm-event package validation.
 │   ├── alarm_policies/              # Policy schema, resolver, catalog, resources
 │   ├── alarm_events.py              # Canonical alarm lifecycle JSONL
 │   ├── link/                        # Config, fingerprint, events, runtime, scheduler
-│   └── profiles/                    # Profile schema, resolver, catalog, resources
+│   ├── profiles/                    # Profile schema, resolver, catalog, resources
+│   └── session/                     # Correlation, normalization, reports, public CLI
 ├── tests/                           # Unit, compatibility, parser, CLI, runtime tests
 ├── docs/                            # Architecture, ADRs, operations, security, schemas
 ├── scripts/                         # Installed demos and package/integration checks
@@ -353,16 +395,16 @@ wheel construction, package-resource checks, and alarm-event package validation.
 
 ### Near term
 
-- command uplink with acknowledgements;
-- continuous parser fuzzing infrastructure;
-- packet-family and schema-identifier research.
+- complete the unified session-inspection operator demo;
+- publish reproducible benchmark and soak evidence;
+- finish release documentation and clean-install verification.
 
 ### Product experience
 
-- terminal mission timeline;
 - web-based session explorer;
 - OpenTelemetry metrics and logs;
-- optional Datadog dashboard and monitors.
+- optional Datadog dashboard and monitors;
+- command uplink with acknowledgements after the v0.5 inspection milestone.
 
 ### Research track
 

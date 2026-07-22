@@ -118,9 +118,32 @@ the summary. Abrupt termination may leave an inspectable partial log without a s
 
 ### Session inspection boundary
 
-The v0.5 inspector consumes telemetry recordings, link events, and alarm events through their existing strict validators. It does not merge their schemas or claim a shared run identity. Telemetry and alarm transitions may correlate by a unique decoded packet sequence; link events remain a separate lane because `packet_index` is not telemetry `packet_sequence`. Process-local elapsed clocks and unsynchronized wall clocks are never combined into a fabricated global timeline.
+The v0.5 inspector consumes telemetry recordings, link events, and alarm events through
+their existing strict validators. It does not merge their schemas or claim a shared run identity.
+Telemetry and alarm transitions may correlate by a unique decoded packet sequence; link events
+remain a separate lane because `packet_index` is not telemetry `packet_sequence`. Process-local
+elapsed clocks and unsynchronized wall clocks are never combined into a fabricated global
+timeline.
 
-Source-local order remains authoritative. Cross-lane precedence is deterministic presentation only, not causal or temporal evidence. See [ADR 0005](adr/0005-session-correlation-semantics.md).
+Source-local order remains authoritative. Cross-lane precedence is deterministic presentation
+only, not causal or temporal evidence. See
+[ADR 0005](adr/0005-session-correlation-semantics.md).
+
+### Session report adapter
+
+The public `orbitops session inspect` adapter projects the immutable normalized session into
+operator text or `orbitops.session_report/v1` JSON. Report metadata, source summaries, diagnostics,
+and unfiltered counters describe the complete selected evidence bundle. Filters and event limits
+change only the rendered timeline projection.
+
+Text and JSON serialization are deterministic. JSON contains no ANSI presentation sequences.
+When `--output` is selected, the adapter writes a temporary file in the destination directory,
+flushes it, and replaces the destination atomically. A failed write leaves no misleading new
+report and does not destroy an existing destination.
+
+The command maps complete, incomplete, incompatible, malformed, and I/O outcomes to distinct exit
+codes. Presentation behavior remains outside the strict evidence loaders and normalized core.
+See the [session-inspection contract](session-inspection.md).
 
 ## Compatibility contracts
 
@@ -135,7 +158,8 @@ OrbitOps maintains separate contracts for:
 7. deterministic alarm lifecycle semantics;
 8. alarm-event JSONL;
 9. telemetry recording and replay JSONL;
-10. unified session-correlation semantics.
+10. unified session-correlation semantics;
+11. versioned session-report serialization and CLI exit-code semantics.
 
 Changing one contract does not silently redefine another. Profile or policy identity metadata
 does not affect the corresponding effective fingerprint.

@@ -4,7 +4,27 @@ All notable changes to OrbitOps are documented here. The project follows Semanti
 
 ## [Unreleased]
 
-No unreleased changes yet.
+### Added
+
+- explicit session-correlation semantics that preserve source-local clocks, order, and identity
+  boundaries;
+- immutable normalized telemetry, alarm, and link evidence models with deterministic diagnostics;
+- strict non-realtime telemetry loading and independently derived source summaries;
+- `orbitops session inspect` with deterministic text and `orbitops.session_report/v1` JSON;
+- optional evidence inputs, bounded packet-sequence and alarm filters, explicit timeline limits,
+  and atomic `--output` writes;
+- installed-wheel session-inspection checks on Linux and macOS.
+
+### Compatibility
+
+- telemetry recording version `1`, alarm-event version `1`, and link-event versions `1` and `2`
+  remain readable through their existing validators;
+- telemetry/alarm exact correlation still requires one unique decoded packet-sequence match;
+- link `packet_index` remains a separate namespace from telemetry `packet_sequence`;
+- filters affect rendered timeline entries only and never rewrite unfiltered source counters;
+- the JSON report contract begins at `orbitops.session_report/v1`;
+- CLI exit codes distinguish complete, incomplete, usage, incompatible, malformed, and I/O
+  outcomes.
 
 ## [0.4.0] - 2026-07-13
 

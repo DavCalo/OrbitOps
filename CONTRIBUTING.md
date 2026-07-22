@@ -21,11 +21,13 @@ make verify
 ## Change workflow
 
 1. Open an issue for substantial product, protocol, or architecture changes.
-2. Create a focused branch from `main`.
-3. Keep runtime dependencies minimal and justify new dependencies.
-4. Add or update tests for observable behavior.
-5. Update the protocol and architecture documentation when contracts change.
-6. Run `make verify` before opening a pull request.
+2. Create a focused branch from the latest verified `main`.
+3. Plan a small number of logical commits when the change has distinct reviewable stages.
+4. Keep runtime dependencies minimal and justify new dependencies.
+5. Add or update tests in the same logical commit as the behavior they verify.
+6. Run targeted checks after each commit and `make verify` once before opening a pull request.
+7. Update public documentation and `[Unreleased]` when user-visible behavior or contracts change.
+8. Review the complete diff, compatibility impact, security impact, and generated artifacts.
 
 ## Engineering expectations
 
@@ -63,12 +65,24 @@ docs: document ground-station operations
 test: cover sequence wraparound
 ```
 
+A pull request may contain a few logical commits when that improves reviewability. Each commit
+should have one recognizable purpose, include its relevant tests, and leave the affected
+subsystem in a valid state. Avoid `WIP`, `fix tests`, `misc`, and other diary-style subjects.
+
+OrbitOps uses squash merge for feature pull requests. The pull-request title becomes the commit
+subject on `main`, and GitHub adds the pull-request number. Do not add `(#PR)` manually to local
+commit subjects or pull-request titles.
+
 ## Pull requests
 
 A pull request should explain:
 
-- the problem;
-- the user-visible outcome;
-- protocol or CLI compatibility implications;
-- tests performed;
+- the problem and user-visible outcome;
+- scope and explicit non-goals;
+- protocol, schema, CLI, platform, and security implications;
+- targeted validation and the complete `make verify` result;
+- documentation and changelog updates;
 - follow-up work that remains out of scope.
+
+Before merge, all required CI checks must pass, review conversations must be resolved, the head
+commit must match the reviewed diff, and the branch must contain no generated or unrelated files.
