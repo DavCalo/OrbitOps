@@ -55,6 +55,7 @@ jobs:
           python scripts/profile_package_check.py
           python scripts/alarm_policy_package_check.py
           python scripts/alarm_event_package_check.py
+          python scripts/session_inspection_package_check.py
 
   python-compatibility:
     name: Python ${{ matrix.python-version }}
@@ -118,6 +119,9 @@ jobs:
 
       - name: Run installed alarm-lifecycle demo
         run: python scripts/alarm_demo_check.py ./build/orbitops_sim
+
+      - name: Run installed session-inspection workflow
+        run: python scripts/session_inspection_package_check.py
 
       - name: Smoke-test simulator CLI
         run: |
