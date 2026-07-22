@@ -39,6 +39,7 @@ class _ReportMetadataDocument(TypedDict):
 
 class _ReportSelectionDocument(TypedDict):
     filters: dict[str, JsonScalar]
+    timeline_entries_matched: int
     timeline_entries_rendered: int
     timeline_entries_total: int
     timeline_truncated: bool
@@ -130,14 +131,15 @@ class SessionReport:
     """One immutable report projection over a complete normalized session model.
 
     ``session`` always retains the unfiltered source summaries and counters.
-    ``timeline`` may be filtered or limited by a caller, while ``timeline_total``
-    records the complete normalized entry count.
+    ``timeline_matched`` records entries that satisfied the active filters before
+    limiting, while ``timeline_total`` records the complete normalized entry count.
     """
 
     session: NormalizedSession
     timeline: tuple[TimelineEntry, ...]
     diagnostics: tuple[Diagnostic, ...]
     timeline_total: int
+    timeline_matched: int
     filters: ImmutableFilters = field(default_factory=dict)
     truncated: bool = False
 
@@ -156,11 +158,19 @@ class SessionReport:
             raise TypeError("timeline_total must be an integer")
         if self.timeline_total != len(self.session.timeline):
             raise ValueError("timeline_total must equal the normalized session entry count")
-        if len(self.timeline) > self.timeline_total:
-            raise ValueError("rendered timeline cannot exceed the normalized session timeline")
+        if isinstance(self.timeline_matched, bool) or not isinstance(self.timeline_matched, int):
+            raise TypeError("timeline_matched must be an integer")
+        if not 0 <= self.timeline_matched <= self.timeline_total:
+            raise ValueError("timeline_matched must be between zero and timeline_total")
+        if len(self.timeline) > self.timeline_matched:
+            raise ValueError("rendered timeline cannot exceed matching timeline entries")
+
         session_entries = {
             (entry.lane, entry.source_index): entry for entry in self.session.timeline
         }
+        timeline_keys = tuple((entry.lane, entry.source_index) for entry in self.timeline)
+        if len(set(timeline_keys)) != len(timeline_keys):
+            raise ValueError("report timeline must not duplicate normalized session entries")
         if any(
             session_entries.get((entry.lane, entry.source_index)) != entry
             for entry in self.timeline
@@ -168,12 +178,37 @@ class SessionReport:
             raise ValueError("report timeline must be a projection of the normalized session")
         if tuple(sorted(self.timeline, key=lambda entry: entry.sort_key)) != self.timeline:
             raise ValueError("report timeline entries must use deterministic order")
+
         if tuple(sorted(self.diagnostics, key=lambda item: item.sort_key)) != self.diagnostics:
             raise ValueError("report diagnostics must use deterministic order")
+        if len(set(self.diagnostics)) != len(self.diagnostics):
+            raise ValueError("report diagnostics must not contain duplicates")
+        remaining_diagnostics = list(self.diagnostics)
+        for diagnostic in self.session.diagnostics:
+            try:
+                remaining_diagnostics.remove(diagnostic)
+            except ValueError as exc:
+                raise ValueError(
+                    "report diagnostics must preserve normalized session diagnostics"
+                ) from exc
+        if any(
+            diagnostic.code is not DiagnosticCode.TIMELINE_TRUNCATED
+            or diagnostic.severity is not DiagnosticSeverity.INFO
+            or diagnostic.lane is not None
+            or diagnostic.source_index is not None
+            or diagnostic.related_lane is not None
+            or diagnostic.related_source_indices
+            for diagnostic in remaining_diagnostics
+        ):
+            raise ValueError("report diagnostics may add only one session-level truncation notice")
+
         if not isinstance(self.truncated, bool):
             raise TypeError("truncated must be a boolean")
-        if self.truncated and len(self.timeline) >= self.timeline_total:
-            raise ValueError("truncated reports must omit at least one timeline entry")
+        expected_truncated = len(self.timeline) < self.timeline_matched
+        if self.truncated != expected_truncated:
+            raise ValueError("truncated must reflect omitted matching timeline entries")
+        if len(remaining_diagnostics) != int(self.truncated):
+            raise ValueError("truncation state requires exactly one truncation diagnostic")
         object.__setattr__(self, "filters", _freeze_filters(self.filters))
 
     @classmethod
@@ -187,6 +222,7 @@ class SessionReport:
             timeline=session.timeline,
             diagnostics=session.diagnostics,
             timeline_total=len(session.timeline),
+            timeline_matched=len(session.timeline),
         )
 
 
@@ -331,6 +367,7 @@ def project_session_report(
         timeline=timeline,
         diagnostics=tuple(sorted(diagnostics, key=lambda item: item.sort_key)),
         timeline_total=len(session.timeline),
+        timeline_matched=len(matched),
         filters=filters,
         truncated=truncated,
     )
@@ -423,6 +460,7 @@ def session_report_document(report: SessionReport) -> SessionReportDocument:
         },
         "selection": {
             "filters": _sorted_mapping(report.filters),
+            "timeline_entries_matched": report.timeline_matched,
             "timeline_entries_rendered": len(report.timeline),
             "timeline_entries_total": report.timeline_total,
             "timeline_truncated": report.truncated,
@@ -543,8 +581,8 @@ def render_session_report_text(report: SessionReport) -> str:
         ),
         "evidence: operator-selected bundle; cross-stream provenance unverified",
         (
-            f"timeline: {len(report.timeline)}/{report.timeline_total} entries "
-            f"truncated={str(report.truncated).lower()}"
+            f"timeline: rendered={len(report.timeline)} matched={report.timeline_matched} "
+            f"total={report.timeline_total} truncated={str(report.truncated).lower()}"
         ),
         f"filters: {_format_mapping(report.filters)}",
         "",

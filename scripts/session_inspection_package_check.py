@@ -246,6 +246,8 @@ def main() -> int:
             raise RuntimeError("installed filtered report did not expose truncation")
         if selection["timeline_entries_rendered"] != 1:
             raise RuntimeError(f"unexpected rendered timeline count: {selection}")
+        if selection["timeline_entries_matched"] != 2:
+            raise RuntimeError(f"unexpected matching timeline count: {selection}")
         _validate_complete_report(filtered_document)
 
         output_path = directory / "session-report.json"

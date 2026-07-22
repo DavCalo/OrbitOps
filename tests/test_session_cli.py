@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import contextlib
 import io
+import os
 import tempfile
 import unittest
 from pathlib import Path
@@ -169,6 +170,57 @@ class SessionCliTests(unittest.TestCase):
         self.assertIn("must not exceed", error.getvalue())
         inspect.assert_not_called()
 
+    def test_output_cannot_replace_selected_evidence(self) -> None:
+        for option in ("--telemetry", "--link-events", "--alarm-events"):
+            with self.subTest(option=option):
+                error = io.StringIO()
+                with (
+                    patch("orbitops.session.cli.inspect_session") as inspect,
+                    contextlib.redirect_stderr(error),
+                    self.assertRaises(SystemExit) as raised,
+                ):
+                    main(
+                        [
+                            "session",
+                            "inspect",
+                            option,
+                            "evidence.jsonl",
+                            "--output",
+                            "evidence.jsonl",
+                        ]
+                    )
+
+                self.assertEqual(raised.exception.code, SessionExitCode.USAGE)
+                self.assertIn(f"same file as {option}", error.getvalue())
+                inspect.assert_not_called()
+
+    def test_output_cannot_replace_a_hard_link_to_selected_evidence(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            telemetry_path = Path(directory) / "telemetry.jsonl"
+            output_path = Path(directory) / "report.json"
+            telemetry_path.write_text("{}\n", encoding="utf-8")
+            os.link(telemetry_path, output_path)
+            error = io.StringIO()
+            with (
+                patch("orbitops.session.cli.inspect_session") as inspect,
+                contextlib.redirect_stderr(error),
+                self.assertRaises(SystemExit) as raised,
+            ):
+                main(
+                    [
+                        "session",
+                        "inspect",
+                        "--telemetry",
+                        str(telemetry_path),
+                        "--output",
+                        str(output_path),
+                    ]
+                )
+
+        self.assertEqual(raised.exception.code, SessionExitCode.USAGE)
+        self.assertIn("same file as --telemetry", error.getvalue())
+        inspect.assert_not_called()
+
     def test_output_is_atomically_written_without_stdout(self) -> None:
         session = Mock(spec=NormalizedSession)
         session.is_complete = True
@@ -245,6 +297,47 @@ class SessionCliTests(unittest.TestCase):
 
             self.assertEqual(code, SessionExitCode.IO_ERROR)
             self.assertIn("replace denied", error.getvalue())
+            self.assertEqual(
+                output_path.read_text(encoding="utf-8"),
+                "previous report\n",
+            )
+            self.assertEqual(list(output_path.parent.glob(".report.txt.*.tmp")), [])
+
+    def test_atomic_output_interrupt_cleans_temporary_file(self) -> None:
+        session = Mock(spec=NormalizedSession)
+        session.is_complete = True
+        session.is_compatible = True
+        report = cast(SessionReport, Mock(spec=SessionReport))
+        with tempfile.TemporaryDirectory() as directory:
+            output_path = Path(directory) / "report.txt"
+            output_path.write_text("previous report\n", encoding="utf-8")
+            with (
+                patch("orbitops.session.cli.inspect_session", return_value=session),
+                patch(
+                    "orbitops.session.cli.project_session_report",
+                    return_value=report,
+                ),
+                patch(
+                    "orbitops.session.cli.render_session_report_text",
+                    return_value="new report\n",
+                ),
+                patch(
+                    "orbitops.session.cli.os.replace",
+                    side_effect=KeyboardInterrupt,
+                ),
+                self.assertRaises(KeyboardInterrupt),
+            ):
+                main(
+                    [
+                        "session",
+                        "inspect",
+                        "--telemetry",
+                        "telemetry.jsonl",
+                        "--output",
+                        str(output_path),
+                    ]
+                )
+
             self.assertEqual(
                 output_path.read_text(encoding="utf-8"),
                 "previous report\n",

@@ -49,8 +49,10 @@ orbitops.session_report/v1
 ```
 
 Version `1` preserves deterministic key ordering and the top-level metadata, summary, sources,
-diagnostics, and timeline sections. Consumers must reject unknown report-format versions instead
-of guessing compatibility.
+diagnostics, and timeline sections. The selection section distinguishes rendered, matching, and
+unfiltered timeline counts so automation never has to parse a diagnostic message to understand
+truncation. Consumers must reject unknown report-format versions instead of guessing
+compatibility.
 
 ## Filters
 
@@ -90,9 +92,11 @@ orbitops session inspect \
   --output sessions/mission-report.json
 ```
 
-Output files are replaced atomically through a temporary file in the destination directory. A
-failed write returns the I/O exit code, removes the temporary file, and preserves an existing
-destination.
+Output files are replaced atomically through a temporary file in the destination directory.
+Failures or interruptions before replacement remove the temporary file and preserve an existing
+destination; once replacement succeeds, the destination contains one complete report. `--output`
+is rejected as a usage error when it refers to any selected evidence file, including filesystem
+aliases, so inspection cannot overwrite its own inputs.
 
 ## Exit codes
 

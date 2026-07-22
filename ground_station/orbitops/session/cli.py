@@ -62,6 +62,19 @@ def _alarm_code_argument(value: str) -> str:
     return normalized
 
 
+def _paths_alias(left: Path, right: Path) -> bool:
+    """Return whether two path arguments identify the same filesystem object."""
+
+    with contextlib.suppress(OSError, RuntimeError):
+        if left.resolve(strict=False) == right.resolve(strict=False):
+            return True
+
+    try:
+        return os.path.samefile(left, right)
+    except OSError:
+        return False
+
+
 def configure_session_parser(parser: argparse.ArgumentParser) -> None:
     """Add public session-inspection subcommands and stable options."""
 
@@ -162,11 +175,11 @@ def _write_report_atomically(output_path: Path, rendered: str) -> None:
         if temporary_path is None:
             raise AssertionError("temporary report path was not created")
         os.replace(temporary_path, output_path)
-    except OSError:
+        temporary_path = None
+    finally:
         if temporary_path is not None:
             with contextlib.suppress(OSError):
                 temporary_path.unlink(missing_ok=True)
-        raise
 
 
 def _write_report(rendered: str, output_path: Path | None) -> None:
@@ -208,6 +221,17 @@ def run_session_command(args: argparse.Namespace) -> int:
         parser = cast(argparse.ArgumentParser, args._session_inspect_parser)
         parser.error("--sequence-min must not exceed --sequence-max")
 
+    output_path: Path | None = args.output
+    if output_path is not None:
+        parser = cast(argparse.ArgumentParser, args._session_inspect_parser)
+        for option, evidence_path in (
+            ("--telemetry", telemetry_path),
+            ("--link-events", link_events_path),
+            ("--alarm-events", alarm_events_path),
+        ):
+            if evidence_path is not None and _paths_alias(evidence_path, output_path):
+                parser.error(f"--output must not refer to the same file as {option}")
+
     try:
         session = inspect_session(
             telemetry_path=telemetry_path,
@@ -235,7 +259,6 @@ def run_session_command(args: argparse.Namespace) -> int:
         if report_format == "json"
         else render_session_report_text(report)
     )
-    output_path: Path | None = args.output
     try:
         _write_report(rendered, output_path)
     except OSError as exc:

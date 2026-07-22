@@ -145,6 +145,7 @@ class SessionReportingTests(unittest.TestCase):
         self.assertEqual(document["summary"]["timeline_entries_total"], 4)
         self.assertEqual(document["summary"]["compatible"], True)
         self.assertEqual(document["selection"]["filters"], {})
+        self.assertEqual(document["selection"]["timeline_entries_matched"], 4)
         self.assertEqual(document["sources"][0]["lane"], "telemetry")
         correlation = document["timeline"][2]["correlation"]
         self.assertIsNotNone(correlation)
@@ -171,7 +172,7 @@ class SessionReportingTests(unittest.TestCase):
             "format: orbitops.session_report/v1",
             "status: complete compatible",
             "evidence: operator-selected bundle; cross-stream provenance unverified",
-            "timeline: 4/4 entries truncated=false",
+            "timeline: rendered=4 matched=4 total=4 truncated=false",
             "filters: none",
             "",
             "SUMMARY",
@@ -245,6 +246,7 @@ class SessionReportingTests(unittest.TestCase):
             timeline=session.timeline[:2],
             diagnostics=session.diagnostics,
             timeline_total=len(session.timeline),
+            timeline_matched=2,
             filters={"sequence_min": 10, "sequence_max": 11},
         )
         document = session_report_document(report)
@@ -267,6 +269,7 @@ class SessionReportingTests(unittest.TestCase):
             [(EvidenceLane.TELEMETRY, 1), (EvidenceLane.ALARM, 1)],
         )
         self.assertEqual(document["selection"]["timeline_entries_total"], 4)
+        self.assertEqual(document["selection"]["timeline_entries_matched"], 2)
         self.assertEqual(document["selection"]["timeline_entries_rendered"], 2)
         self.assertEqual(document["sources"][0]["counters"]["records_total"], 2)
         self.assertEqual(
@@ -292,6 +295,7 @@ class SessionReportingTests(unittest.TestCase):
         self.assertTrue(report.truncated)
         self.assertEqual(len(report.timeline), 1)
         self.assertEqual(document["summary"]["timeline_entries_total"], 4)
+        self.assertEqual(document["selection"]["timeline_entries_matched"], 4)
         self.assertEqual(document["summary"]["compatible"], True)
         truncation = next(
             item for item in report.diagnostics if item.code is DiagnosticCode.TIMELINE_TRUNCATED
@@ -323,6 +327,7 @@ class SessionReportingTests(unittest.TestCase):
                 timeline=session.timeline,
                 diagnostics=session.diagnostics,
                 timeline_total=3,
+                timeline_matched=4,
             )
         with self.assertRaises(ValueError):
             SessionReport(
@@ -330,7 +335,30 @@ class SessionReportingTests(unittest.TestCase):
                 timeline=session.timeline,
                 diagnostics=session.diagnostics,
                 timeline_total=4,
+                timeline_matched=4,
                 truncated=True,
+            )
+
+    def test_report_rejects_duplicate_timeline_entries(self) -> None:
+        session = sample_session()
+        with self.assertRaisesRegex(ValueError, "must not duplicate"):
+            SessionReport(
+                session=session,
+                timeline=(session.timeline[0], session.timeline[0]),
+                diagnostics=session.diagnostics,
+                timeline_total=len(session.timeline),
+                timeline_matched=2,
+            )
+
+    def test_report_preserves_session_diagnostics(self) -> None:
+        session = sample_session()
+        with self.assertRaisesRegex(ValueError, "preserve normalized session diagnostics"):
+            SessionReport(
+                session=session,
+                timeline=session.timeline,
+                diagnostics=(),
+                timeline_total=len(session.timeline),
+                timeline_matched=len(session.timeline),
             )
 
 
