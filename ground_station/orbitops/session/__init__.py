@@ -33,11 +33,24 @@ from .models import (
     TimelineEntry,
     TimelineEntryKind,
 )
+from .reporting import (
+    EVIDENCE_BUNDLE_KIND,
+    REPORT_FORMAT,
+    REPORT_FORMAT_VERSION,
+    SessionReport,
+    SessionReportDocument,
+    render_session_report_json,
+    render_session_report_text,
+    session_report_document,
+)
 
 __all__ = [
     "CONTRACT_SEMANTICS",
+    "EVIDENCE_BUNDLE_KIND",
     "LANE_PRECEDENCE",
     "PAIR_CORRELATION_RULES",
+    "REPORT_FORMAT",
+    "REPORT_FORMAT_VERSION",
     "ContractSemantics",
     "CorrelationBasis",
     "CorrelationDecision",
@@ -53,6 +66,8 @@ __all__ = [
     "MalformedEvidenceError",
     "NormalizedSession",
     "SessionInspectionError",
+    "SessionReport",
+    "SessionReportDocument",
     "SourceCompleteness",
     "SourceDescriptor",
     "TimelineEntry",
@@ -62,4 +77,7 @@ __all__ = [
     "correlation_rule",
     "inspect_session",
     "presentation_key",
+    "render_session_report_json",
+    "render_session_report_text",
+    "session_report_document",
 ]
