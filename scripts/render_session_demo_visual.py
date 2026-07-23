@@ -11,7 +11,13 @@ import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 
+_FORMAT_RE = re.compile(r"^format: (?P<format>\S+)$", re.MULTILINE)
 _STATUS_RE = re.compile(r"^status: (?P<status>.+)$", re.MULTILINE)
+_EVIDENCE_RE = re.compile(
+    r"^evidence: operator-selected bundle; cross-stream provenance "
+    r"(?P<provenance>verified|unverified)$",
+    re.MULTILINE,
+)
 _TIMELINE_RE = re.compile(
     r"^timeline: rendered=(?P<rendered>\d+) matched=(?P<matched>\d+) "
     r"total=(?P<total>\d+) truncated=(?P<truncated>true|false)$",
@@ -61,7 +67,9 @@ _LINK_RE = re.compile(
 
 @dataclass(frozen=True, slots=True)
 class DemoSnapshot:
+    report_format: str
     status: str
+    provenance_verified: bool
     version: str
     profile: str
     policy: str
@@ -71,7 +79,9 @@ class DemoSnapshot:
     forwarded: int
     alarms: int
     timeline_total: int
+    timeline_matched: int
     timeline_rendered: int
+    timeline_truncated: bool
     diagnostics: int
     telemetry_decoded: int
     telemetry_gaps: int
@@ -94,7 +104,9 @@ def _integer(match: re.Match[str], name: str) -> int:
 
 
 def parse_capture(text: str) -> DemoSnapshot:
+    report_format = _match(_FORMAT_RE, text, "report format")
     status = _match(_STATUS_RE, text, "report status")
+    evidence = _match(_EVIDENCE_RE, text, "evidence provenance")
     timeline = _match(_TIMELINE_RE, text, "timeline summary")
     diagnostics = _match(_DIAGNOSTICS_RE, text, "diagnostic count")
     summary = _match(_SUMMARY_RE, text, "final deterministic summary")
@@ -103,7 +115,9 @@ def parse_capture(text: str) -> DemoSnapshot:
     link = _match(_LINK_RE, text, "link counters")
 
     snapshot = DemoSnapshot(
+        report_format=report_format.group("format"),
         status=status.group("status"),
+        provenance_verified=evidence.group("provenance") == "verified",
         version=summary.group("version"),
         profile=summary.group("profile"),
         policy=summary.group("policy"),
@@ -113,7 +127,9 @@ def parse_capture(text: str) -> DemoSnapshot:
         forwarded=_integer(summary, "forwarded"),
         alarms=_integer(summary, "alarms"),
         timeline_total=_integer(summary, "timeline"),
+        timeline_matched=_integer(timeline, "matched"),
         timeline_rendered=_integer(timeline, "rendered"),
+        timeline_truncated=timeline.group("truncated") == "true",
         diagnostics=_integer(diagnostics, "count"),
         telemetry_decoded=_integer(telemetry, "decoded"),
         telemetry_gaps=_integer(telemetry, "gaps"),
@@ -124,18 +140,34 @@ def parse_capture(text: str) -> DemoSnapshot:
         link_reordered=_integer(link, "reordered"),
     )
 
+    if snapshot.report_format != "orbitops.session_report/v1":
+        raise ValueError(f"unsupported report format: {snapshot.report_format!r}")
+    if snapshot.status != "complete compatible":
+        raise ValueError(f"capture report is not complete and compatible: {snapshot.status!r}")
+    if snapshot.provenance_verified:
+        raise ValueError("capture unexpectedly claims verified cross-stream provenance")
     if snapshot.timeline_total != _integer(timeline, "total"):
         raise ValueError("final summary and report timeline totals disagree")
+    if snapshot.timeline_matched != snapshot.timeline_total:
+        raise ValueError("flagship preview must match the complete unfiltered timeline")
+    if not snapshot.timeline_truncated or not (
+        0 < snapshot.timeline_rendered < snapshot.timeline_matched
+    ):
+        raise ValueError("flagship preview must expose explicit bounded truncation")
     if snapshot.alarms != _integer(alarm, "total"):
         raise ValueError("final summary and alarm counters disagree")
     if snapshot.received != _integer(link, "received"):
         raise ValueError("final summary and link received counters disagree")
     if snapshot.dropped != _integer(link, "dropped"):
         raise ValueError("final summary and link drop counters disagree")
+    if snapshot.delayed != _integer(link, "delayed"):
+        raise ValueError("final summary and link delayed counters disagree")
     if snapshot.forwarded != _integer(link, "forwarded"):
         raise ValueError("final summary and link forwarded counters disagree")
     if snapshot.telemetry_decoded != snapshot.forwarded:
         raise ValueError("decoded telemetry and forwarded delivery counts disagree")
+    if snapshot.dropped + snapshot.forwarded != snapshot.received:
+        raise ValueError("link accounting does not reconcile received packets")
     return snapshot
 
 
@@ -157,7 +189,7 @@ def render_svg(snapshot: DemoSnapshot) -> str:
         "no corruption / duplicates / reordering" if clean_link else "additional faults observed"
     )
     alarm_counts = f"{snapshot.alarm_raised} raised  ·  {snapshot.alarm_updated} updated"
-    report_line = f"orbitops.session_report/v1  ·  timeline {snapshot.timeline_total} entries"
+    report_line = f"{snapshot.report_format}  ·  timeline {snapshot.timeline_total} entries"
     preview_line = (
         f"{snapshot.diagnostics} diagnostics  ·  "
         f"preview rendered {snapshot.timeline_rendered} entries"
@@ -174,10 +206,16 @@ def render_svg(snapshot: DemoSnapshot) -> str:
         '<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="720" '
         'viewBox="0 0 1200 720" role="img" aria-labelledby="title desc">',
         '<title id="title">OrbitOps deterministic session-inspection demo</title>',
-        '<desc id="desc">A real OrbitOps run using the intermittent-loss link profile and '
-        "thermal-demo alarm policy. Fifty-two packets were received by the link emulator, "
-        "seven were dropped, forty-five were forwarded and decoded, nine alarm transitions "
-        "were recorded, and the final report was complete and compatible.</desc>",
+        (
+            '<desc id="desc">A real OrbitOps run using the '
+            f"{html.escape(snapshot.profile)} link profile and "
+            f"{html.escape(snapshot.policy)} alarm policy. "
+            f"{snapshot.received} packets were received by the link emulator, "
+            f"{snapshot.dropped} were dropped, "
+            f"{snapshot.forwarded} were forwarded and decoded, "
+            f"{snapshot.alarms} alarm transitions were recorded, and the final report was "
+            "complete and compatible.</desc>"
+        ),
         "<style>",
         "  .bg{fill:#07111f}.panel{fill:#0d1b2a;stroke:#26384d;stroke-width:1.5}",
         "  .terminal{fill:#08131f;stroke:#2c425a;stroke-width:2}",
@@ -232,7 +270,7 @@ def render_svg(snapshot: DemoSnapshot) -> str:
         _text(175, 414, "C++ simulator", "body"),
         _text(520, 414, snapshot.profile, "body"),
         _text(900, 414, snapshot.policy, "body"),
-        _text(139, 438, "52 thermal packets", "small"),
+        _text(139, 438, f"{snapshot.received} thermal packets", "small"),
         _text(500, 438, "seeded loss + latency", "small"),
         _text(891, 438, "auditable transitions", "small"),
         '<rect class="panel" x="66" y="472" width="1051" height="142" rx="14"/>',

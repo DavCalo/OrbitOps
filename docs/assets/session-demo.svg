@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" width="1200" height="720" viewBox="0 0 1200 720" role="img" aria-labelledby="title desc">
 <title id="title">OrbitOps deterministic session-inspection demo</title>
-<desc id="desc">A real OrbitOps run using the intermittent-loss link profile and thermal-demo alarm policy. Fifty-two packets were received by the link emulator, seven were dropped, forty-five were forwarded and decoded, nine alarm transitions were recorded, and the final report was complete and compatible.</desc>
+<desc id="desc">A real OrbitOps run using the intermittent-loss link profile and thermal-demo alarm policy. 52 packets were received by the link emulator, 7 were dropped, 45 were forwarded and decoded, 9 alarm transitions were recorded, and the final report was complete and compatible.</desc>
 <style>
   .bg{fill:#07111f}.panel{fill:#0d1b2a;stroke:#26384d;stroke-width:1.5}
   .terminal{fill:#08131f;stroke:#2c425a;stroke-width:2}

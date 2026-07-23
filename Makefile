@@ -29,7 +29,7 @@ integration: build
 	$(PYTHON) scripts/link_demo_check.py ./$(BUILD_DIR)/orbitops_sim
 	$(PYTHON) scripts/profile_demo_check.py ./$(BUILD_DIR)/orbitops_sim
 	$(PYTHON) scripts/alarm_demo_check.py ./$(BUILD_DIR)/orbitops_sim
-	$(PYTHON) scripts/session_demo_check.py ./$(BUILD_DIR)/orbitops_sim
+	$(PYTHON) scripts/session_demo_visual_check.py ./$(BUILD_DIR)/orbitops_sim
 
 link-demo: build
 	$(PYTHON) scripts/link_demo_check.py ./$(BUILD_DIR)/orbitops_sim

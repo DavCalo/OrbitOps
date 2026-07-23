@@ -66,6 +66,17 @@ _EXPECTED_ALARM_COUNTS = {
     "transitions_cleared": 0,
     "transitions_total": 9,
 }
+_EXPECTED_ALARM_TRANSITIONS = (
+    (AlarmEventType.ALARM_RAISED, "ELEVATED_TEMPERATURE", "warning", 7),
+    (AlarmEventType.ALARM_RAISED, "SEQUENCE_GAP", "warning", 13),
+    (AlarmEventType.ALARM_RAISED, "SEQUENCE_GAP", "warning", 15),
+    (AlarmEventType.ALARM_RAISED, "SEQUENCE_GAP", "warning", 17),
+    (AlarmEventType.ALARM_UPDATED, "HIGH_TEMPERATURE", "critical", 18),
+    (AlarmEventType.ALARM_RAISED, "SEQUENCE_GAP", "warning", 24),
+    (AlarmEventType.ALARM_RAISED, "SEQUENCE_GAP", "warning", 35),
+    (AlarmEventType.ALARM_RAISED, "SEQUENCE_GAP", "warning", 46),
+    (AlarmEventType.ALARM_RAISED, "SAFE_MODE", "warning", 51),
+)
 _EXPECTED_LINK_COUNTS = {
     "packets_received": 52,
     "packets_dropped": 7,
@@ -155,6 +166,31 @@ def _alarm_codes(events: Sequence[AlarmEvent]) -> frozenset[str]:
         if isinstance(code, str):
             codes.add(code)
     return frozenset(codes)
+
+
+def _alarm_transition_signature(
+    events: Sequence[AlarmEvent],
+) -> tuple[tuple[AlarmEventType, str, str, int], ...]:
+    signature: list[tuple[AlarmEventType, str, str, int]] = []
+    transition_types = {
+        AlarmEventType.ALARM_RAISED,
+        AlarmEventType.ALARM_UPDATED,
+        AlarmEventType.ALARM_CLEARED,
+    }
+    for event in events:
+        if event.event_type not in transition_types:
+            continue
+        code = event.attributes.get("code")
+        severity = event.attributes.get("severity")
+        sequence = event.packet_sequence
+        if not isinstance(code, str):
+            raise RuntimeError(f"alarm transition has invalid code: {event}")
+        if not isinstance(severity, str):
+            raise RuntimeError(f"alarm transition has invalid severity: {event}")
+        if not isinstance(sequence, int):
+            raise RuntimeError(f"alarm transition has invalid packet sequence: {event}")
+        signature.append((event.event_type, code, severity, sequence))
+    return tuple(signature)
 
 
 def _interrupt_and_collect(process: subprocess.Popen[str]) -> tuple[str, str]:
@@ -510,6 +546,12 @@ def main() -> int:
             raise RuntimeError(
                 "unexpected deterministic alarm counters: "
                 f"expected={_EXPECTED_ALARM_COUNTS} actual={alarm_counters}"
+            )
+        alarm_signature = _alarm_transition_signature(alarm_events)
+        if alarm_signature != _EXPECTED_ALARM_TRANSITIONS:
+            raise RuntimeError(
+                "unexpected deterministic alarm transitions: "
+                f"expected={_EXPECTED_ALARM_TRANSITIONS!r} actual={alarm_signature!r}"
             )
         alarm_metadata = alarm_metadata_from_events(alarm_events)
         if (
