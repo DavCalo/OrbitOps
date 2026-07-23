@@ -120,6 +120,9 @@ jobs:
       - name: Run installed alarm-lifecycle demo
         run: python scripts/alarm_demo_check.py ./build/orbitops_sim
 
+      - name: Run installed session-inspection demo
+        run: python scripts/session_demo_check.py ./build/orbitops_sim
+
       - name: Run installed session-inspection workflow
         run: python scripts/session_inspection_package_check.py
 
