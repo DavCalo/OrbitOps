@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="720" viewBox="0 0 1200 720" role="img" aria-labelledby="title desc">
+<title id="title">OrbitOps deterministic session-inspection demo</title>
+<desc id="desc">A real OrbitOps run using the intermittent-loss link profile and thermal-demo alarm policy. 52 packets were received by the link emulator, 7 were dropped, 45 were forwarded and decoded, 9 alarm transitions were recorded, and the final report was complete and compatible.</desc>
+<style>
+  .bg{fill:#07111f}.panel{fill:#0d1b2a;stroke:#26384d;stroke-width:1.5}
+  .terminal{fill:#08131f;stroke:#2c425a;stroke-width:2}
+  .title{fill:#f8fafc;font:700 30px ui-monospace,SFMono-Regular,Menlo,monospace}
+  .subtitle{fill:#93a4b8;font:16px ui-monospace,SFMono-Regular,Menlo,monospace}
+  .label{fill:#93a4b8;font:14px ui-monospace,SFMono-Regular,Menlo,monospace}
+  .value{fill:#f8fafc;font:700 34px ui-monospace,SFMono-Regular,Menlo,monospace}
+  .body{fill:#dbe7f3;font:16px ui-monospace,SFMono-Regular,Menlo,monospace}
+  .small{fill:#93a4b8;font:13px ui-monospace,SFMono-Regular,Menlo,monospace}
+  .ok{fill:#4ade80}.warn{fill:#fbbf24}.accent{fill:#38bdf8}
+  .track{fill:#1d3045}.bar{fill:#38bdf8}.line{stroke:#35506c;stroke-width:2}
+</style>
+<rect class="bg" width="1200" height="720" rx="24"/>
+<rect class="terminal" x="38" y="38" width="1124" height="644" rx="18"/>
+<circle cx="70" cy="70" r="7" fill="#fb7185"/>
+<circle cx="94" cy="70" r="7" fill="#fbbf24"/>
+<circle cx="118" cy="70" r="7" fill="#4ade80"/>
+<text x="66" y="125" class="title">OrbitOps / session inspect</text>
+<text x="66" y="153" class="subtitle">real deterministic run · dynamic ports and timestamps omitted</text>
+<rect x="825" y="104" width="292" height="48" rx="24" fill="#123523" stroke="#2e8b57"/>
+<text x="851" y="136" class="body ok">COMPLETE  •  COMPATIBLE</text>
+<rect class="panel" x="66" y="190" width="330" height="162" rx="14"/>
+<text x="88" y="220" class="label">LINK EMULATOR</text>
+<text x="88" y="265" class="value">52</text>
+<text x="170" y="265" class="body">received</text>
+<text x="88" y="300" class="body">7 dropped  ·  45 forwarded</text>
+<text x="88" y="326" class="small">45 delayed  ·  no corruption / duplicates / reordering</text>
+<rect class="track" x="88" y="338" width="280" height="8" rx="4"/>
+<rect class="bar" x="88" y="338" width="242" height="8" rx="4"/>
+<text x="306" y="331" class="small accent">87%</text>
+<rect class="panel" x="435" y="190" width="330" height="162" rx="14"/>
+<text x="457" y="220" class="label">GROUND STATION</text>
+<text x="457" y="265" class="value">45</text>
+<text x="539" y="265" class="body">decoded</text>
+<text x="457" y="300" class="body">6 sequence gaps detected</text>
+<text x="457" y="326" class="small">strict packet validation · telemetry JSONL v1</text>
+<rect class="panel" x="804" y="190" width="313" height="162" rx="14"/>
+<text x="826" y="220" class="label">ALARM LIFECYCLE</text>
+<text x="826" y="265" class="value">9</text>
+<text x="885" y="265" class="body">transitions</text>
+<text x="826" y="300" class="body">8 raised  ·  1 updated</text>
+<text x="826" y="326" class="small">thermal escalation · SAFE-mode entry</text>
+<line class="line" x1="232" y1="382" x2="966" y2="382"/>
+<circle cx="232" cy="382" r="8" class="accent"/>
+<circle cx="599" cy="382" r="8" class="accent"/>
+<circle cx="966" cy="382" r="8" class="accent"/>
+<text x="175" y="414" class="body">C++ simulator</text>
+<text x="520" y="414" class="body">intermittent-loss</text>
+<text x="900" y="414" class="body">thermal-demo</text>
+<text x="139" y="438" class="small">52 thermal packets</text>
+<text x="500" y="438" class="small">seeded loss + latency</text>
+<text x="891" y="438" class="small">auditable transitions</text>
+<rect class="panel" x="66" y="472" width="1051" height="142" rx="14"/>
+<text x="88" y="505" class="label">REPORT EVIDENCE</text>
+<text x="88" y="544" class="body">orbitops.session_report/v1  ·  timeline 248 entries</text>
+<text x="88" y="573" class="body">7 diagnostics  ·  preview rendered 16 entries</text>
+<text x="88" y="600" class="small">telemetry + alarm correlation by unique packet sequence; link remains a separate lane</text>
+<text x="66" y="652" class="small">OrbitOps 0.4.0  ·  profile=intermittent-loss  ·  policy=thermal-demo</text>
+</svg>
