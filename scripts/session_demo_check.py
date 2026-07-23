@@ -120,7 +120,7 @@ def _wait_for_line(
         selector.register(process.stdout, selectors.EVENT_READ)
         if not selector.select(timeout=5.0):
             raise RuntimeError(f"{description} did not report readiness")
-        line = process.stdout.readline().strip()
+        line = cast(str, process.stdout.readline()).strip()
     finally:
         selector.close()
 
