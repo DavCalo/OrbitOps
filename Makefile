@@ -1,4 +1,4 @@
-.PHONY: alarm-demo bootstrap build clean configure integration link-demo package profile-demo python-tests quality test verify
+.PHONY: alarm-demo bootstrap build clean configure integration link-demo package profile-demo python-tests quality session-demo test verify
 
 PYTHON ?= python3
 CMAKE ?= cmake
@@ -29,6 +29,7 @@ integration: build
 	$(PYTHON) scripts/link_demo_check.py ./$(BUILD_DIR)/orbitops_sim
 	$(PYTHON) scripts/profile_demo_check.py ./$(BUILD_DIR)/orbitops_sim
 	$(PYTHON) scripts/alarm_demo_check.py ./$(BUILD_DIR)/orbitops_sim
+	$(PYTHON) scripts/session_demo_check.py ./$(BUILD_DIR)/orbitops_sim
 
 link-demo: build
 	$(PYTHON) scripts/link_demo_check.py ./$(BUILD_DIR)/orbitops_sim
@@ -38,6 +39,9 @@ profile-demo: build
 
 alarm-demo: build
 	$(PYTHON) scripts/alarm_demo_check.py ./$(BUILD_DIR)/orbitops_sim
+
+session-demo: build
+	$(PYTHON) scripts/session_demo_check.py ./$(BUILD_DIR)/orbitops_sim
 
 quality:
 	$(PYTHON) -m ruff check .
