@@ -119,20 +119,35 @@ cmake --build build
 ./build/orbitops_sim --version
 ```
 
-### 3. Run the installed alarm-lifecycle demo
+### 3. Run the flagship session-inspection demo
+
+```bash
+make session-demo
+```
+
+This installed workflow runs the C++ thermal simulator through the deterministic
+`intermittent-loss` profile and the `thermal-demo` alarm policy. It records telemetry, link events,
+and alarm transitions, then invokes `orbitops session inspect` to produce one bounded operator
+report.
+
+![OrbitOps deterministic session-inspection demo](docs/assets/session-demo.svg)
+
+What to notice:
+
+- the seeded link applies latency and drops seven of 52 packets;
+- 45 forwarded packets become validated telemetry with six explicit sequence gaps;
+- temperature warning, critical escalation, and SAFE-mode transitions remain auditable;
+- alarm transitions correlate to unique telemetry packet sequences;
+- link events remain a separate evidence lane rather than claiming packet equivalence;
+- the final report is complete, compatible, versioned, and explicitly truncated for presentation.
+
+The visual is generated from validated real demo output. Dynamic ports, temporary paths, run
+identifiers, and timestamps are omitted from the static representation.
+
+Focused workflows remain available:
 
 ```bash
 make alarm-demo
-```
-
-This flagship v0.4.0 workflow uses the installed `orbitops` executable, selects the built-in
-`thermal-demo` policy, sends 52 C++ thermal packets, observes temperature warning and critical
-transitions, observes SAFE-mode entry, and verifies policy identity, fingerprint, lifecycle
-ordering, and final counters.
-
-The installed mission-profile workflow remains available as:
-
-```bash
 make profile-demo
 ```
 

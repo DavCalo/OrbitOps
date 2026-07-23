@@ -13,7 +13,10 @@ All notable changes to OrbitOps are documented here. The project follows Semanti
 - `orbitops session inspect` with deterministic text and `orbitops.session_report/v1` JSON;
 - optional evidence inputs, bounded packet-sequence and alarm filters, explicit timeline limits,
   and atomic `--output` writes;
-- installed-wheel session-inspection checks on Linux and macOS.
+- installed-wheel session-inspection checks on Linux and macOS;
+- deterministic `make session-demo` orchestration across the C++ simulator, link emulator, ground
+  station, all three evidence files, installed inspector, and a repository-hosted visual generated
+  from validated real output.
 
 ### Compatibility
 

@@ -15,6 +15,44 @@ orbitops session inspect \
 At least one evidence source is required. Missing lanes remain explicit incomplete sources rather
 than being silently removed from the report.
 
+## Flagship installed demo
+
+Run the complete C++ and Python operator workflow with:
+
+```bash
+make session-demo
+```
+
+The demo uses the installed `orbitops` executable, the C++ thermal simulator, the
+`intermittent-loss` mission profile, and the `thermal-demo` alarm policy. It creates isolated
+telemetry, link-event, and alarm-event evidence, validates their summaries and identities, and
+invokes the installed session inspector in text and JSON modes.
+
+The deterministic reference run receives 52 packets at the link emulator, drops seven, forwards
+and decodes 45, reports six telemetry sequence gaps, and records nine alarm transitions. The
+operator should notice that telemetry and alarm evidence correlate by unique packet sequence while
+link evidence remains a separate lane.
+
+The README visual is generated from a real captured run rather than a fabricated mock-up. Regenerate
+it after intentional demo-output changes with:
+
+```bash
+python_cmd="$PWD/.venv/bin/python"
+capture="$(mktemp)"
+
+PATH="$PWD/.venv/bin:$PATH" \
+  make PYTHON="$python_cmd" session-demo > "$capture"
+
+PATH="$PWD/.venv/bin:$PATH" \
+  "$python_cmd" scripts/render_session_demo_visual.py \
+  "$capture" docs/assets/session-demo.svg
+
+rm -f "$capture"
+```
+
+The renderer validates agreement between report counters and the final demo summary. It omits
+dynamic ports, temporary paths, run identifiers, and timestamps from the committed SVG.
+
 ## Evidence boundaries
 
 Each source is loaded through its existing strict contract:
