@@ -18,6 +18,11 @@ All notable changes to OrbitOps are documented here. The project follows Semanti
   station, all three evidence files, installed inspector, and a repository-hosted visual generated
   from validated real output.
 
+### Fixed
+
+- session-demo visual now prioritizes the three-stage operator story, keeps secondary evidence in a
+  compact report strip, and rejects generated text that exceeds explicit monospace layout budgets.
+
 ### Compatibility
 
 - telemetry recording version `1`, alarm-event version `1`, and link-event versions `1` and `2`
