@@ -171,48 +171,50 @@ def parse_capture(text: str) -> DemoSnapshot:
     return snapshot
 
 
-def _text(x: int, y: int, value: str, css_class: str) -> str:
+def _text(
+    x: int,
+    y: int,
+    value: str,
+    css_class: str,
+    *,
+    max_chars: int | None = None,
+    anchor: str | None = None,
+) -> str:
+    # The visual uses a monospace font. Explicit line budgets fail closed before text can
+    # cross a card boundary when deterministic demo labels or counters change.
+    if max_chars is not None and len(value) > max_chars:
+        raise ValueError(f"visual text exceeds {max_chars}-character layout budget: {value!r}")
     escaped = html.escape(value)
-    return f'<text x="{x}" y="{y}" class="{css_class}">{escaped}</text>'
+    anchor_attribute = f' text-anchor="{anchor}"' if anchor is not None else ""
+    return f'<text x="{x}" y="{y}" class="{css_class}"{anchor_attribute}>{escaped}</text>'
 
 
 def render_svg(snapshot: DemoSnapshot) -> str:
-    status_label = snapshot.status.upper().replace(" ", "  •  ")
-    link_quality = snapshot.forwarded / snapshot.received if snapshot.received else 0.0
-    delivered_percent = round(link_quality * 100)
-    clean_link = (
-        snapshot.link_corrupted == 0
-        and snapshot.link_duplicated == 0
-        and snapshot.link_reordered == 0
+    status_label = snapshot.status.upper().replace(" ", "\u00a0•\u00a0")
+    delivered_percent = (
+        round((snapshot.forwarded / snapshot.received) * 100) if snapshot.received else 0
     )
-    clean_label = (
-        "no corruption / duplicates / reordering" if clean_link else "additional faults observed"
+    delivered_width = (
+        round(282 * snapshot.forwarded / snapshot.received) if snapshot.received else 0
     )
-    alarm_counts = f"{snapshot.alarm_raised} raised  ·  {snapshot.alarm_updated} updated"
-    report_line = f"{snapshot.report_format}  ·  timeline {snapshot.timeline_total} entries"
-    preview_line = (
-        f"{snapshot.diagnostics} diagnostics  ·  "
-        f"preview rendered {snapshot.timeline_rendered} entries"
-    )
-    correlation_line = (
-        "telemetry + alarm correlation by unique packet sequence; link remains a separate lane"
-    )
-    footer = (
-        f"OrbitOps {snapshot.version}  ·  profile={snapshot.profile}  ·  policy={snapshot.policy}"
+    link_detail = f"{snapshot.dropped} dropped · {snapshot.forwarded} forwarded"
+    telemetry_detail = f"{snapshot.telemetry_gaps} sequence gaps"
+    alarm_detail = f"{snapshot.alarm_raised} raised · {snapshot.alarm_updated} updated"
+    evidence_note = (
+        "Telemetry and alarms correlate by packet sequence; link evidence remains independent."
     )
 
     lines = [
         '<?xml version="1.0" encoding="UTF-8"?>',
-        '<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="720" '
-        'viewBox="0 0 1200 720" role="img" aria-labelledby="title desc">',
+        '<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="620" '
+        'viewBox="0 0 1200 620" role="img" aria-labelledby="title desc">',
         '<title id="title">OrbitOps deterministic session-inspection demo</title>',
         (
-            '<desc id="desc">A real OrbitOps run using the '
+            '<desc id="desc">A real installed OrbitOps workflow using the '
             f"{html.escape(snapshot.profile)} link profile and "
             f"{html.escape(snapshot.policy)} alarm policy. "
-            f"{snapshot.received} packets were received by the link emulator, "
-            f"{snapshot.dropped} were dropped, "
-            f"{snapshot.forwarded} were forwarded and decoded, "
+            f"{snapshot.received} packets were received, "
+            f"{snapshot.telemetry_decoded} were decoded after {snapshot.dropped} drops, "
             f"{snapshot.alarms} alarm transitions were recorded, and the final report was "
             "complete and compatible.</desc>"
         ),
@@ -220,65 +222,86 @@ def render_svg(snapshot: DemoSnapshot) -> str:
         "  .bg{fill:#07111f}.panel{fill:#0d1b2a;stroke:#26384d;stroke-width:1.5}",
         "  .terminal{fill:#08131f;stroke:#2c425a;stroke-width:2}",
         "  .title{fill:#f8fafc;font:700 30px ui-monospace,SFMono-Regular,Menlo,monospace}",
-        "  .subtitle{fill:#93a4b8;font:16px ui-monospace,SFMono-Regular,Menlo,monospace}",
-        "  .label{fill:#93a4b8;font:14px ui-monospace,SFMono-Regular,Menlo,monospace}",
-        "  .value{fill:#f8fafc;font:700 34px ui-monospace,SFMono-Regular,Menlo,monospace}",
-        "  .body{fill:#dbe7f3;font:16px ui-monospace,SFMono-Regular,Menlo,monospace}",
-        "  .small{fill:#93a4b8;font:13px ui-monospace,SFMono-Regular,Menlo,monospace}",
-        "  .ok{fill:#4ade80}.warn{fill:#fbbf24}.accent{fill:#38bdf8}",
-        "  .track{fill:#1d3045}.bar{fill:#38bdf8}.line{stroke:#35506c;stroke-width:2}",
-        "</style>",
-        '<rect class="bg" width="1200" height="720" rx="24"/>',
-        '<rect class="terminal" x="38" y="38" width="1124" height="644" rx="18"/>',
-        '<circle cx="70" cy="70" r="7" fill="#fb7185"/>',
-        '<circle cx="94" cy="70" r="7" fill="#fbbf24"/>',
-        '<circle cx="118" cy="70" r="7" fill="#4ade80"/>',
-        _text(66, 125, "OrbitOps / session inspect", "title"),
-        _text(
-            66,
-            153,
-            "real deterministic run · dynamic ports and timestamps omitted",
-            "subtitle",
+        "  .subtitle{fill:#93a4b8;font:15px ui-monospace,SFMono-Regular,Menlo,monospace}",
+        (
+            "  .label{fill:#93a4b8;font:600 13px "
+            "ui-monospace,SFMono-Regular,Menlo,monospace;"
+            "letter-spacing:1.5px}"
         ),
-        '<rect x="825" y="104" width="292" height="48" rx="24" fill="#123523" stroke="#2e8b57"/>',
-        _text(851, 136, status_label, "body ok"),
-        '<rect class="panel" x="66" y="190" width="330" height="162" rx="14"/>',
-        _text(88, 220, "LINK EMULATOR", "label"),
-        _text(88, 265, str(snapshot.received), "value"),
-        _text(170, 265, "received", "body"),
-        _text(88, 300, f"{snapshot.dropped} dropped  ·  {snapshot.forwarded} forwarded", "body"),
-        _text(88, 326, f"{snapshot.delayed} delayed  ·  {clean_label}", "small"),
-        '<rect class="track" x="88" y="338" width="280" height="8" rx="4"/>',
-        f'<rect class="bar" x="88" y="338" width="{round(280 * link_quality)}" height="8" rx="4"/>',
-        _text(306, 331, f"{delivered_percent}%", "small accent"),
-        '<rect class="panel" x="435" y="190" width="330" height="162" rx="14"/>',
-        _text(457, 220, "GROUND STATION", "label"),
-        _text(457, 265, str(snapshot.telemetry_decoded), "value"),
-        _text(539, 265, "decoded", "body"),
-        _text(457, 300, f"{snapshot.telemetry_gaps} sequence gaps detected", "body"),
-        _text(457, 326, "strict packet validation · telemetry JSONL v1", "small"),
-        '<rect class="panel" x="804" y="190" width="313" height="162" rx="14"/>',
-        _text(826, 220, "ALARM LIFECYCLE", "label"),
-        _text(826, 265, str(snapshot.alarms), "value"),
-        _text(885, 265, "transitions", "body"),
-        _text(826, 300, alarm_counts, "body"),
-        _text(826, 326, "thermal escalation · SAFE-mode entry", "small"),
-        '<line class="line" x1="232" y1="382" x2="966" y2="382"/>',
-        '<circle cx="232" cy="382" r="8" class="accent"/>',
-        '<circle cx="599" cy="382" r="8" class="accent"/>',
-        '<circle cx="966" cy="382" r="8" class="accent"/>',
-        _text(175, 414, "C++ simulator", "body"),
-        _text(520, 414, snapshot.profile, "body"),
-        _text(900, 414, snapshot.policy, "body"),
-        _text(139, 438, f"{snapshot.received} thermal packets", "small"),
-        _text(500, 438, "seeded loss + latency", "small"),
-        _text(891, 438, "auditable transitions", "small"),
-        '<rect class="panel" x="66" y="472" width="1051" height="142" rx="14"/>',
-        _text(88, 505, "REPORT EVIDENCE", "label"),
-        _text(88, 544, report_line, "body"),
-        _text(88, 573, preview_line, "body"),
-        _text(88, 600, correlation_line, "small"),
-        _text(66, 652, footer, "small"),
+        "  .value{fill:#f8fafc;font:700 44px ui-monospace,SFMono-Regular,Menlo,monospace}",
+        "  .metric{fill:#dbe7f3;font:600 16px ui-monospace,SFMono-Regular,Menlo,monospace}",
+        "  .detail{fill:#dbe7f3;font:14px ui-monospace,SFMono-Regular,Menlo,monospace}",
+        "  .context{fill:#93a4b8;font:12px ui-monospace,SFMono-Regular,Menlo,monospace}",
+        "  .evidence{fill:#f8fafc;font:700 21px ui-monospace,SFMono-Regular,Menlo,monospace}",
+        "  .small{fill:#93a4b8;font:12px ui-monospace,SFMono-Regular,Menlo,monospace}",
+        "  .ok{fill:#4ade80}.accent{fill:#38bdf8}.warn{fill:#fbbf24}",
+        "  .track{fill:#1d3045}.bar{fill:#38bdf8}",
+        "  .divider{stroke:#26384d;stroke-width:1.5}",
+        (
+            "  .arrow{stroke:#38bdf8;stroke-width:2;fill:none;"
+            "stroke-linecap:round;stroke-linejoin:round}"
+        ),
+        "</style>",
+        '<rect class="bg" width="1200" height="620" rx="24"/>',
+        '<rect class="terminal" x="32" y="32" width="1136" height="556" rx="24"/>',
+        _text(72, 82, "OrbitOps session inspection", "title", max_chars=32),
+        _text(
+            72,
+            112,
+            "deterministic installed workflow · real evidence · bounded operator preview",
+            "subtitle",
+            max_chars=76,
+        ),
+        '<rect x="874" y="54" width="242" height="46" rx="23" fill="#123523" stroke="#2e8b57"/>',
+        _text(995, 83, status_label, "detail ok", max_chars=24, anchor="middle"),
+        '<rect class="panel" x="66" y="151" width="330" height="190" rx="16"/>',
+        _text(90, 182, "LINK EMULATOR", "label", max_chars=20),
+        _text(90, 235, str(snapshot.received), "value", max_chars=4),
+        _text(90, 267, "packets received", "metric", max_chars=24),
+        _text(90, 294, link_detail, "detail", max_chars=30),
+        _text(90, 317, snapshot.profile, "context", max_chars=24),
+        _text(
+            372,
+            317,
+            f"{delivered_percent}%",
+            "context accent",
+            max_chars=4,
+            anchor="end",
+        ),
+        '<rect class="track" x="90" y="324" width="282" height="8" rx="4"/>',
+        f'<rect class="bar" x="90" y="324" width="{delivered_width}" height="8" rx="4"/>',
+        '<path class="arrow" d="M 402 255 H 417 M 411 249 L 417 255 L 411 261"/>',
+        '<rect class="panel" x="426" y="151" width="330" height="190" rx="16"/>',
+        _text(450, 182, "GROUND STATION", "label", max_chars=20),
+        _text(450, 235, str(snapshot.telemetry_decoded), "value", max_chars=4),
+        _text(450, 267, "validated telemetry", "metric", max_chars=24),
+        _text(450, 304, telemetry_detail, "detail warn", max_chars=28),
+        _text(450, 329, "strict validation · JSONL v1", "context", max_chars=38),
+        '<path class="arrow" d="M 762 255 H 777 M 771 249 L 777 255 L 771 261"/>',
+        '<rect class="panel" x="786" y="151" width="330" height="190" rx="16"/>',
+        _text(810, 182, "ALARM LIFECYCLE", "label", max_chars=20),
+        _text(810, 235, str(snapshot.alarms), "value", max_chars=4),
+        _text(810, 267, "auditable transitions", "metric", max_chars=24),
+        _text(810, 304, alarm_detail, "detail", max_chars=28),
+        _text(810, 329, f"{snapshot.policy} · SAFE-mode entry", "context", max_chars=38),
+        '<rect class="panel" x="66" y="375" width="1050" height="152" rx="16"/>',
+        _text(90, 405, "REPORT EVIDENCE", "label", max_chars=20),
+        _text(90, 455, f"{snapshot.timeline_total} timeline entries", "evidence", max_chars=26),
+        '<line class="divider" x1="374" y1="426" x2="374" y2="474"/>',
+        _text(410, 455, f"{snapshot.diagnostics} diagnostics", "evidence", max_chars=22),
+        '<line class="divider" x1="624" y1="426" x2="624" y2="474"/>',
+        _text(660, 455, f"{snapshot.timeline_rendered}-entry preview", "evidence", max_chars=24),
+        _text(90, 497, evidence_note, "small", max_chars=92),
+        _text(72, 562, f"OrbitOps {snapshot.version}", "small", max_chars=24),
+        _text(600, 562, snapshot.report_format, "small", max_chars=36, anchor="middle"),
+        _text(
+            1128,
+            562,
+            "generated from validated demo output",
+            "small",
+            max_chars=42,
+            anchor="end",
+        ),
         "</svg>",
         "",
     ]
