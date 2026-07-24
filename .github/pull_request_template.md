@@ -22,6 +22,7 @@ Write `None` only when none apply.
 
 ## Review readiness
 
+- [ ] Labels reviewed: exactly one work label and no more than one product-domain label
 - [ ] Commit history is logical and free of WIP/fixup noise
 - [ ] Complete diff reviewed
 - [ ] No unrelated, generated, private, or temporary files
