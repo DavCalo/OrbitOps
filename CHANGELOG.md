@@ -17,6 +17,11 @@ All notable changes to OrbitOps are documented here. The project follows Semanti
 - deterministic `make session-demo` orchestration across the C++ simulator, link emulator, ground
   station, all three evidence files, installed inspector, and a repository-hosted visual generated
   from validated real output.
+- deterministic small, medium, and large session-inspection benchmark datasets with isolated
+  load/parse, normalize/correlate, render/serialize, total timing, report-size, and normalized RSS
+  measurements plus a bounded CI smoke workload;
+- retained raw reference benchmark and 60-minute single-process soak evidence with periodic resource
+  samples, validated final summaries, reproduction commands, and explicit baseline-only caveats.
 
 ### Fixed
 

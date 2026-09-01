@@ -1,0 +1,948 @@
+{
+  "commit_sha": "6cd9aec9a5e114b3f5bfa88048adeaf9c2df481f",
+  "environment": {
+    "architecture": "arm64",
+    "logical_cpu_count": 8,
+    "os_release": "25.6.0",
+    "os_system": "Darwin",
+    "python_implementation": "CPython",
+    "python_version": "3.13.7"
+  },
+  "format": "orbitops.session_inspection_benchmark",
+  "format_version": 1,
+  "measurement": {
+    "aggregation": "median of successful measured samples; mean, minimum, and maximum retained; warmups excluded from aggregates and failures retained in raw samples",
+    "cpu_clock": "time.process_time_ns",
+    "measured_samples_per_scale": 5,
+    "peak_rss": {
+      "api": "resource.getrusage(RUSAGE_SELF).ru_maxrss",
+      "linux_source_unit": "KiB",
+      "macos_source_unit": "bytes",
+      "normalized_unit": "bytes"
+    },
+    "sample_isolation": "one fresh Python subprocess per warmup or measured sample",
+    "wall_clock": "time.perf_counter_ns",
+    "warmups_per_scale": 1
+  },
+  "report_format": "orbitops.session_report/v1",
+  "runs": [
+    {
+      "aggregates": {
+        "failed_measured_samples": 0,
+        "failed_warmups": 0,
+        "measured_samples_succeeded": 5,
+        "peak_rss_bytes": {
+          "maximum": 31408128.0,
+          "mean": 31336038.4,
+          "median": 31342592.0,
+          "minimum": 31277056.0
+        },
+        "phases": {
+          "load_parse": {
+            "cpu_seconds": {
+              "maximum": 0.005418,
+              "mean": 0.0052606,
+              "median": 0.00522,
+              "minimum": 0.005181
+            },
+            "wall_seconds": {
+              "maximum": 0.00542,
+              "mean": 0.005260725,
+              "median": 0.005219667,
+              "minimum": 0.005179833
+            }
+          },
+          "normalize_correlate": {
+            "cpu_seconds": {
+              "maximum": 0.005347,
+              "mean": 0.0052937999999999995,
+              "median": 0.005292,
+              "minimum": 0.005255
+            },
+            "wall_seconds": {
+              "maximum": 0.005346625,
+              "mean": 0.0052934832,
+              "median": 0.005292209,
+              "minimum": 0.005253291
+            }
+          },
+          "render_serialize": {
+            "cpu_seconds": {
+              "maximum": 0.003469,
+              "mean": 0.0033958,
+              "median": 0.0034,
+              "minimum": 0.003306
+            },
+            "wall_seconds": {
+              "maximum": 0.003469791,
+              "mean": 0.0033954579999999996,
+              "median": 0.003399125,
+              "minimum": 0.003305583
+            }
+          },
+          "total": {
+            "cpu_seconds": {
+              "maximum": 0.014116,
+              "mean": 0.013959599999999999,
+              "median": 0.013929,
+              "minimum": 0.013756
+            },
+            "wall_seconds": {
+              "maximum": 0.014121334,
+              "mean": 0.0139611334,
+              "median": 0.013930208,
+              "minimum": 0.013757041
+            }
+          }
+        },
+        "report_bytes": {
+          "maximum": 400893.0,
+          "mean": 400893.0,
+          "median": 400893.0,
+          "minimum": 400893.0
+        }
+      },
+      "dataset": {
+        "counts": {
+          "alarm_events": 12,
+          "alarm_transitions": 10,
+          "input_records_total": 1014,
+          "link_events": 752,
+          "normalized_timeline_entries": 1010,
+          "telemetry_records": 250
+        },
+        "files": {
+          "alarm_events": "alarm-events.jsonl",
+          "link_events": "link-events.jsonl",
+          "telemetry": "telemetry.jsonl"
+        },
+        "format": "orbitops.session_benchmark_dataset",
+        "format_version": 1,
+        "parameters": {
+          "alarm_stride": 25,
+          "link_events_per_packet": 3,
+          "packet_count": 250
+        },
+        "scale": "small",
+        "sha256": {
+          "alarm_events_sha256": "37f79ae658b8c9dd81a7948fee7de2eb91396f1257fd6bfdac9da2abcbaca6fc",
+          "link_events_sha256": "ab30f301f5efc1e06100f333dae779968e7844223800108d3e784f8037eec3d6",
+          "telemetry_sha256": "5be2a20dc6c650dfc0119131ca1c8f34c27ae0b968c23b0cbc1a1b6d729cddda"
+        }
+      },
+      "samples": [
+        {
+          "current_rss_bytes": 31358976,
+          "diagnostics_total": 0,
+          "peak_rss_bytes": 31342592,
+          "phases": {
+            "load_parse": {
+              "cpu_seconds": 0.005196,
+              "wall_seconds": 0.0051955
+            },
+            "normalize_correlate": {
+              "cpu_seconds": 0.005265,
+              "wall_seconds": 0.005265167
+            },
+            "render_serialize": {
+              "cpu_seconds": 0.003335,
+              "wall_seconds": 0.003334958
+            },
+            "total": {
+              "cpu_seconds": 0.013807,
+              "wall_seconds": 0.013807792
+            }
+          },
+          "reconciliation": {
+            "cpu_seconds": 1.1e-05,
+            "wall_seconds": 1.2167e-05
+          },
+          "report_bytes": 400893,
+          "return_code": 0,
+          "sample_index": 0,
+          "success": true,
+          "timeline_entries": 1010,
+          "warmup": true
+        },
+        {
+          "current_rss_bytes": 31293440,
+          "diagnostics_total": 0,
+          "peak_rss_bytes": 31277056,
+          "phases": {
+            "load_parse": {
+              "cpu_seconds": 0.00522,
+              "wall_seconds": 0.005219667
+            },
+            "normalize_correlate": {
+              "cpu_seconds": 0.005263,
+              "wall_seconds": 0.005262791
+            },
+            "render_serialize": {
+              "cpu_seconds": 0.003408,
+              "wall_seconds": 0.003407541
+            },
+            "total": {
+              "cpu_seconds": 0.013905,
+              "wall_seconds": 0.013905167
+            }
+          },
+          "reconciliation": {
+            "cpu_seconds": 1.4e-05,
+            "wall_seconds": 1.5168e-05
+          },
+          "report_bytes": 400893,
+          "return_code": 0,
+          "sample_index": 0,
+          "success": true,
+          "timeline_entries": 1010,
+          "warmup": false
+        },
+        {
+          "current_rss_bytes": 31309824,
+          "diagnostics_total": 0,
+          "peak_rss_bytes": 31293440,
+          "phases": {
+            "load_parse": {
+              "cpu_seconds": 0.005269,
+              "wall_seconds": 0.005268917
+            },
+            "normalize_correlate": {
+              "cpu_seconds": 0.005347,
+              "wall_seconds": 0.005346625
+            },
+            "render_serialize": {
+              "cpu_seconds": 0.003469,
+              "wall_seconds": 0.003469791
+            },
+            "total": {
+              "cpu_seconds": 0.014092,
+              "wall_seconds": 0.014091917
+            }
+          },
+          "reconciliation": {
+            "cpu_seconds": 7e-06,
+            "wall_seconds": 6.584e-06
+          },
+          "report_bytes": 400893,
+          "return_code": 0,
+          "sample_index": 1,
+          "success": true,
+          "timeline_entries": 1010,
+          "warmup": false
+        },
+        {
+          "current_rss_bytes": 31375360,
+          "diagnostics_total": 0,
+          "peak_rss_bytes": 31358976,
+          "phases": {
+            "load_parse": {
+              "cpu_seconds": 0.005181,
+              "wall_seconds": 0.005179833
+            },
+            "normalize_correlate": {
+              "cpu_seconds": 0.005255,
+              "wall_seconds": 0.005253291
+            },
+            "render_serialize": {
+              "cpu_seconds": 0.003306,
+              "wall_seconds": 0.003305583
+            },
+            "total": {
+              "cpu_seconds": 0.013756,
+              "wall_seconds": 0.013757041
+            }
+          },
+          "reconciliation": {
+            "cpu_seconds": 1.4e-05,
+            "wall_seconds": 1.8334e-05
+          },
+          "report_bytes": 400893,
+          "return_code": 0,
+          "sample_index": 2,
+          "success": true,
+          "timeline_entries": 1010,
+          "warmup": false
+        },
+        {
+          "current_rss_bytes": 31358976,
+          "diagnostics_total": 0,
+          "peak_rss_bytes": 31342592,
+          "phases": {
+            "load_parse": {
+              "cpu_seconds": 0.005418,
+              "wall_seconds": 0.00542
+            },
+            "normalize_correlate": {
+              "cpu_seconds": 0.005292,
+              "wall_seconds": 0.005292209
+            },
+            "render_serialize": {
+              "cpu_seconds": 0.0034,
+              "wall_seconds": 0.003399125
+            },
+            "total": {
+              "cpu_seconds": 0.014116,
+              "wall_seconds": 0.014121334
+            }
+          },
+          "reconciliation": {
+            "cpu_seconds": 6e-06,
+            "wall_seconds": 1e-05
+          },
+          "report_bytes": 400893,
+          "return_code": 0,
+          "sample_index": 3,
+          "success": true,
+          "timeline_entries": 1010,
+          "warmup": false
+        },
+        {
+          "current_rss_bytes": 31424512,
+          "diagnostics_total": 0,
+          "peak_rss_bytes": 31408128,
+          "phases": {
+            "load_parse": {
+              "cpu_seconds": 0.005215,
+              "wall_seconds": 0.005215208
+            },
+            "normalize_correlate": {
+              "cpu_seconds": 0.005312,
+              "wall_seconds": 0.0053125
+            },
+            "render_serialize": {
+              "cpu_seconds": 0.003396,
+              "wall_seconds": 0.00339525
+            },
+            "total": {
+              "cpu_seconds": 0.013929,
+              "wall_seconds": 0.013930208
+            }
+          },
+          "reconciliation": {
+            "cpu_seconds": 6e-06,
+            "wall_seconds": 7.25e-06
+          },
+          "report_bytes": 400893,
+          "return_code": 0,
+          "sample_index": 4,
+          "success": true,
+          "timeline_entries": 1010,
+          "warmup": false
+        }
+      ],
+      "scale": "small"
+    },
+    {
+      "aggregates": {
+        "failed_measured_samples": 0,
+        "failed_warmups": 0,
+        "measured_samples_succeeded": 5,
+        "peak_rss_bytes": {
+          "maximum": 49709056.0,
+          "mean": 49614028.8,
+          "median": 49643520.0,
+          "minimum": 49479680.0
+        },
+        "phases": {
+          "load_parse": {
+            "cpu_seconds": {
+              "maximum": 0.050577,
+              "mean": 0.0497986,
+              "median": 0.049382,
+              "minimum": 0.049285
+            },
+            "wall_seconds": {
+              "maximum": 0.050572125,
+              "mean": 0.049797108,
+              "median": 0.049381666,
+              "minimum": 0.049283583
+            }
+          },
+          "normalize_correlate": {
+            "cpu_seconds": {
+              "maximum": 0.103521,
+              "mean": 0.1005696,
+              "median": 0.099504,
+              "minimum": 0.099205
+            },
+            "wall_seconds": {
+              "maximum": 0.103520167,
+              "mean": 0.1005694168,
+              "median": 0.099503334,
+              "minimum": 0.0992045
+            }
+          },
+          "render_serialize": {
+            "cpu_seconds": {
+              "maximum": 0.033858,
+              "mean": 0.03342,
+              "median": 0.033411,
+              "minimum": 0.033085
+            },
+            "wall_seconds": {
+              "maximum": 0.033853583,
+              "mean": 0.0334219916,
+              "median": 0.033426583,
+              "minimum": 0.033083084
+            }
+          },
+          "total": {
+            "cpu_seconds": {
+              "maximum": 0.187774,
+              "mean": 0.1837992,
+              "median": 0.182008,
+              "minimum": 0.181965
+            },
+            "wall_seconds": {
+              "maximum": 0.1877755,
+              "mean": 0.1838041332,
+              "median": 0.182025333,
+              "minimum": 0.181966
+            }
+          }
+        },
+        "report_bytes": {
+          "maximum": 4016337.0,
+          "mean": 4016337.0,
+          "median": 4016337.0,
+          "minimum": 4016337.0
+        }
+      },
+      "dataset": {
+        "counts": {
+          "alarm_events": 102,
+          "alarm_transitions": 100,
+          "input_records_total": 10104,
+          "link_events": 7502,
+          "normalized_timeline_entries": 10100,
+          "telemetry_records": 2500
+        },
+        "files": {
+          "alarm_events": "alarm-events.jsonl",
+          "link_events": "link-events.jsonl",
+          "telemetry": "telemetry.jsonl"
+        },
+        "format": "orbitops.session_benchmark_dataset",
+        "format_version": 1,
+        "parameters": {
+          "alarm_stride": 25,
+          "link_events_per_packet": 3,
+          "packet_count": 2500
+        },
+        "scale": "medium",
+        "sha256": {
+          "alarm_events_sha256": "6e7dc928f52450cd54fc704445ec6300723d53d1f43618beaaa476c4667cfb8c",
+          "link_events_sha256": "6045b53fe84d59a147071c962f435857938b2d134d0968646572146b42da63c6",
+          "telemetry_sha256": "bdef6ef639617330e7861a9efa540ea9933d897300af64a45c7e0f45c09e0407"
+        }
+      },
+      "samples": [
+        {
+          "current_rss_bytes": 49479680,
+          "diagnostics_total": 0,
+          "peak_rss_bytes": 49463296,
+          "phases": {
+            "load_parse": {
+              "cpu_seconds": 0.0494,
+              "wall_seconds": 0.049399541
+            },
+            "normalize_correlate": {
+              "cpu_seconds": 0.099306,
+              "wall_seconds": 0.099306209
+            },
+            "render_serialize": {
+              "cpu_seconds": 0.033117,
+              "wall_seconds": 0.033115875
+            },
+            "total": {
+              "cpu_seconds": 0.181838,
+              "wall_seconds": 0.181838583
+            }
+          },
+          "reconciliation": {
+            "cpu_seconds": 1.5e-05,
+            "wall_seconds": 1.6958e-05
+          },
+          "report_bytes": 4016337,
+          "return_code": 0,
+          "sample_index": 0,
+          "success": true,
+          "timeline_entries": 10100,
+          "warmup": true
+        },
+        {
+          "current_rss_bytes": 49709056,
+          "diagnostics_total": 0,
+          "peak_rss_bytes": 49692672,
+          "phases": {
+            "load_parse": {
+              "cpu_seconds": 0.049364,
+              "wall_seconds": 0.049363916
+            },
+            "normalize_correlate": {
+              "cpu_seconds": 0.099504,
+              "wall_seconds": 0.099503334
+            },
+            "render_serialize": {
+              "cpu_seconds": 0.033085,
+              "wall_seconds": 0.033083084
+            },
+            "total": {
+              "cpu_seconds": 0.181965,
+              "wall_seconds": 0.181966
+            }
+          },
+          "reconciliation": {
+            "cpu_seconds": 1.2e-05,
+            "wall_seconds": 1.5666e-05
+          },
+          "report_bytes": 4016337,
+          "return_code": 0,
+          "sample_index": 0,
+          "success": true,
+          "timeline_entries": 10100,
+          "warmup": false
+        },
+        {
+          "current_rss_bytes": 49659904,
+          "diagnostics_total": 0,
+          "peak_rss_bytes": 49643520,
+          "phases": {
+            "load_parse": {
+              "cpu_seconds": 0.050385,
+              "wall_seconds": 0.05038425
+            },
+            "normalize_correlate": {
+              "cpu_seconds": 0.103521,
+              "wall_seconds": 0.103520167
+            },
+            "render_serialize": {
+              "cpu_seconds": 0.033858,
+              "wall_seconds": 0.033853583
+            },
+            "total": {
+              "cpu_seconds": 0.187774,
+              "wall_seconds": 0.1877755
+            }
+          },
+          "reconciliation": {
+            "cpu_seconds": 1e-05,
+            "wall_seconds": 1.75e-05
+          },
+          "report_bytes": 4016337,
+          "return_code": 0,
+          "sample_index": 1,
+          "success": true,
+          "timeline_entries": 10100,
+          "warmup": false
+        },
+        {
+          "current_rss_bytes": 49725440,
+          "diagnostics_total": 0,
+          "peak_rss_bytes": 49709056,
+          "phases": {
+            "load_parse": {
+              "cpu_seconds": 0.049382,
+              "wall_seconds": 0.049381666
+            },
+            "normalize_correlate": {
+              "cpu_seconds": 0.099205,
+              "wall_seconds": 0.0992045
+            },
+            "render_serialize": {
+              "cpu_seconds": 0.033411,
+              "wall_seconds": 0.033426583
+            },
+            "total": {
+              "cpu_seconds": 0.182008,
+              "wall_seconds": 0.182025333
+            }
+          },
+          "reconciliation": {
+            "cpu_seconds": 1e-05,
+            "wall_seconds": 1.2584e-05
+          },
+          "report_bytes": 4016337,
+          "return_code": 0,
+          "sample_index": 2,
+          "success": true,
+          "timeline_entries": 10100,
+          "warmup": false
+        },
+        {
+          "current_rss_bytes": 49496064,
+          "diagnostics_total": 0,
+          "peak_rss_bytes": 49479680,
+          "phases": {
+            "load_parse": {
+              "cpu_seconds": 0.049285,
+              "wall_seconds": 0.049283583
+            },
+            "normalize_correlate": {
+              "cpu_seconds": 0.099497,
+              "wall_seconds": 0.099497625
+            },
+            "render_serialize": {
+              "cpu_seconds": 0.033179,
+              "wall_seconds": 0.033181083
+            },
+            "total": {
+              "cpu_seconds": 0.181973,
+              "wall_seconds": 0.181977375
+            }
+          },
+          "reconciliation": {
+            "cpu_seconds": 1.2e-05,
+            "wall_seconds": 1.5084e-05
+          },
+          "report_bytes": 4016337,
+          "return_code": 0,
+          "sample_index": 3,
+          "success": true,
+          "timeline_entries": 10100,
+          "warmup": false
+        },
+        {
+          "current_rss_bytes": 49561600,
+          "diagnostics_total": 0,
+          "peak_rss_bytes": 49545216,
+          "phases": {
+            "load_parse": {
+              "cpu_seconds": 0.050577,
+              "wall_seconds": 0.050572125
+            },
+            "normalize_correlate": {
+              "cpu_seconds": 0.101121,
+              "wall_seconds": 0.101121458
+            },
+            "render_serialize": {
+              "cpu_seconds": 0.033567,
+              "wall_seconds": 0.033565625
+            },
+            "total": {
+              "cpu_seconds": 0.185276,
+              "wall_seconds": 0.185276458
+            }
+          },
+          "reconciliation": {
+            "cpu_seconds": 1.1e-05,
+            "wall_seconds": 1.725e-05
+          },
+          "report_bytes": 4016337,
+          "return_code": 0,
+          "sample_index": 4,
+          "success": true,
+          "timeline_entries": 10100,
+          "warmup": false
+        }
+      ],
+      "scale": "medium"
+    },
+    {
+      "aggregates": {
+        "failed_measured_samples": 0,
+        "failed_warmups": 0,
+        "measured_samples_succeeded": 5,
+        "peak_rss_bytes": {
+          "maximum": 103972864.0,
+          "mean": 103904051.2,
+          "median": 103907328.0,
+          "minimum": 103858176.0
+        },
+        "phases": {
+          "load_parse": {
+            "cpu_seconds": {
+              "maximum": 0.200209,
+              "mean": 0.19621879999999997,
+              "median": 0.195902,
+              "minimum": 0.194099
+            },
+            "wall_seconds": {
+              "maximum": 0.200586333,
+              "mean": 0.1962944084,
+              "median": 0.195896875,
+              "minimum": 0.194098
+            }
+          },
+          "normalize_correlate": {
+            "cpu_seconds": {
+              "maximum": 1.066133,
+              "mean": 1.0586074,
+              "median": 1.061498,
+              "minimum": 1.04812
+            },
+            "wall_seconds": {
+              "maximum": 1.0661545,
+              "mean": 1.0587603166,
+              "median": 1.061730875,
+              "minimum": 1.048133791
+            }
+          },
+          "render_serialize": {
+            "cpu_seconds": {
+              "maximum": 0.158617,
+              "mean": 0.1533128,
+              "median": 0.152841,
+              "minimum": 0.149017
+            },
+            "wall_seconds": {
+              "maximum": 0.160957084,
+              "mean": 0.1537797752,
+              "median": 0.152839458,
+              "minimum": 0.149015708
+            }
+          },
+          "total": {
+            "cpu_seconds": {
+              "maximum": 1.415358,
+              "mean": 1.4081526,
+              "median": 1.414895,
+              "minimum": 1.397094
+            },
+            "wall_seconds": {
+              "maximum": 1.417471541,
+              "mean": 1.4088565000000002,
+              "median": 1.415386084,
+              "minimum": 1.397123959
+            }
+          }
+        },
+        "report_bytes": {
+          "maximum": 16117083.0,
+          "mean": 16117083.0,
+          "median": 16117083.0,
+          "minimum": 16117083.0
+        }
+      },
+      "dataset": {
+        "counts": {
+          "alarm_events": 402,
+          "alarm_transitions": 400,
+          "input_records_total": 40404,
+          "link_events": 30002,
+          "normalized_timeline_entries": 40400,
+          "telemetry_records": 10000
+        },
+        "files": {
+          "alarm_events": "alarm-events.jsonl",
+          "link_events": "link-events.jsonl",
+          "telemetry": "telemetry.jsonl"
+        },
+        "format": "orbitops.session_benchmark_dataset",
+        "format_version": 1,
+        "parameters": {
+          "alarm_stride": 25,
+          "link_events_per_packet": 3,
+          "packet_count": 10000
+        },
+        "scale": "large",
+        "sha256": {
+          "alarm_events_sha256": "89a26b9a484482fd442098c71d4a195e7b0800b01c14d562bb2fec8a1c501c11",
+          "link_events_sha256": "6f3fe7962a1bff2f1f9e9347d14f742c431416f2023eb7abe4339ee6c247538d",
+          "telemetry_sha256": "9011462ea21024dd560daf050f5c5cf7992ee13b9b2c8873210f55945961f97e"
+        }
+      },
+      "samples": [
+        {
+          "current_rss_bytes": 99024896,
+          "diagnostics_total": 0,
+          "peak_rss_bytes": 103858176,
+          "phases": {
+            "load_parse": {
+              "cpu_seconds": 0.197819,
+              "wall_seconds": 0.197816459
+            },
+            "normalize_correlate": {
+              "cpu_seconds": 1.064063,
+              "wall_seconds": 1.064090708
+            },
+            "render_serialize": {
+              "cpu_seconds": 0.151304,
+              "wall_seconds": 0.151301583
+            },
+            "total": {
+              "cpu_seconds": 1.413196,
+              "wall_seconds": 1.413229583
+            }
+          },
+          "reconciliation": {
+            "cpu_seconds": 1e-05,
+            "wall_seconds": 2.0833e-05
+          },
+          "report_bytes": 16117083,
+          "return_code": 0,
+          "sample_index": 0,
+          "success": true,
+          "timeline_entries": 40400,
+          "warmup": true
+        },
+        {
+          "current_rss_bytes": 99041280,
+          "diagnostics_total": 0,
+          "peak_rss_bytes": 103874560,
+          "phases": {
+            "load_parse": {
+              "cpu_seconds": 0.196118,
+              "wall_seconds": 0.196128625
+            },
+            "normalize_correlate": {
+              "cpu_seconds": 1.04812,
+              "wall_seconds": 1.048133791
+            },
+            "render_serialize": {
+              "cpu_seconds": 0.152841,
+              "wall_seconds": 0.152839458
+            },
+            "total": {
+              "cpu_seconds": 1.397094,
+              "wall_seconds": 1.397123959
+            }
+          },
+          "reconciliation": {
+            "cpu_seconds": 1.5e-05,
+            "wall_seconds": 2.2085e-05
+          },
+          "report_bytes": 16117083,
+          "return_code": 0,
+          "sample_index": 0,
+          "success": true,
+          "timeline_entries": 40400,
+          "warmup": false
+        },
+        {
+          "current_rss_bytes": 99024896,
+          "diagnostics_total": 0,
+          "peak_rss_bytes": 103858176,
+          "phases": {
+            "load_parse": {
+              "cpu_seconds": 0.194099,
+              "wall_seconds": 0.194098
+            },
+            "normalize_correlate": {
+              "cpu_seconds": 1.055136,
+              "wall_seconds": 1.055144417
+            },
+            "render_serialize": {
+              "cpu_seconds": 0.149017,
+              "wall_seconds": 0.149015708
+            },
+            "total": {
+              "cpu_seconds": 1.398265,
+              "wall_seconds": 1.398277208
+            }
+          },
+          "reconciliation": {
+            "cpu_seconds": 1.3e-05,
+            "wall_seconds": 1.9083e-05
+          },
+          "report_bytes": 16117083,
+          "return_code": 0,
+          "sample_index": 1,
+          "success": true,
+          "timeline_entries": 40400,
+          "warmup": false
+        },
+        {
+          "current_rss_bytes": 99074048,
+          "diagnostics_total": 0,
+          "peak_rss_bytes": 103907328,
+          "phases": {
+            "load_parse": {
+              "cpu_seconds": 0.195902,
+              "wall_seconds": 0.195896875
+            },
+            "normalize_correlate": {
+              "cpu_seconds": 1.066133,
+              "wall_seconds": 1.0661545
+            },
+            "render_serialize": {
+              "cpu_seconds": 0.153306,
+              "wall_seconds": 0.153306709
+            },
+            "total": {
+              "cpu_seconds": 1.415358,
+              "wall_seconds": 1.415386084
+            }
+          },
+          "reconciliation": {
+            "cpu_seconds": 1.7e-05,
+            "wall_seconds": 2.8e-05
+          },
+          "report_bytes": 16117083,
+          "return_code": 0,
+          "sample_index": 2,
+          "success": true,
+          "timeline_entries": 40400,
+          "warmup": false
+        },
+        {
+          "current_rss_bytes": 99074048,
+          "diagnostics_total": 0,
+          "peak_rss_bytes": 103907328,
+          "phases": {
+            "load_parse": {
+              "cpu_seconds": 0.194766,
+              "wall_seconds": 0.194762209
+            },
+            "normalize_correlate": {
+              "cpu_seconds": 1.061498,
+              "wall_seconds": 1.061730875
+            },
+            "render_serialize": {
+              "cpu_seconds": 0.158617,
+              "wall_seconds": 0.160957084
+            },
+            "total": {
+              "cpu_seconds": 1.414895,
+              "wall_seconds": 1.417471541
+            }
+          },
+          "reconciliation": {
+            "cpu_seconds": 1.4e-05,
+            "wall_seconds": 2.1373e-05
+          },
+          "report_bytes": 16117083,
+          "return_code": 0,
+          "sample_index": 3,
+          "success": true,
+          "timeline_entries": 40400,
+          "warmup": false
+        },
+        {
+          "current_rss_bytes": 99139584,
+          "diagnostics_total": 0,
+          "peak_rss_bytes": 103972864,
+          "phases": {
+            "load_parse": {
+              "cpu_seconds": 0.200209,
+              "wall_seconds": 0.200586333
+            },
+            "normalize_correlate": {
+              "cpu_seconds": 1.06215,
+              "wall_seconds": 1.062638
+            },
+            "render_serialize": {
+              "cpu_seconds": 0.152783,
+              "wall_seconds": 0.152779917
+            },
+            "total": {
+              "cpu_seconds": 1.415151,
+              "wall_seconds": 1.416023708
+            }
+          },
+          "reconciliation": {
+            "cpu_seconds": 9e-06,
+            "wall_seconds": 1.9458e-05
+          },
+          "report_bytes": 16117083,
+          "return_code": 0,
+          "sample_index": 4,
+          "success": true,
+          "timeline_entries": 40400,
+          "warmup": false
+        }
+      ],
+      "scale": "large"
+    }
+  ]
+}

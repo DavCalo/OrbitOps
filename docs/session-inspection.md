@@ -157,6 +157,94 @@ identify the affected source without printing raw telemetry bytes. JSON contains
 sequences. Report fingerprints and source identifiers are reproducibility context, not
 authentication or provenance proof.
 
+## Performance and soak evidence
+
+Issue #42 establishes a reproducible performance baseline for the existing inspector. It does not
+define a cross-platform speed threshold and it does not treat one soak as a reliability guarantee.
+The retained reference evidence was produced from commit
+`6cd9aec9a5e114b3f5bfa88048adeaf9c2df481f` on Darwin/arm64 with CPython 3.13.7 and eight logical
+CPUs.
+
+The benchmark uses one warm-up and five measured samples per scale. Every warm-up and measured
+sample runs in a fresh Python subprocess; aggregates use the median of successful measured samples
+while retaining mean, minimum, maximum, and every failed sample in the raw result. Peak RSS is
+normalized to bytes across Linux and macOS before aggregation. Successful raw samples also retain
+a non-negative reconciliation gap between the sum of measured phases and the enclosing total; the
+validator rejects phase timings that fall outside that measured total.
+
+| Scale | Telemetry | Input records | Load/parse median | Normalize/correlate median | Render/serialize median | Total median | Peak RSS median | Report bytes |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| small | 250 | 1,014 | 0.005220 s | 0.005292 s | 0.003399 s | 0.013930 s | 31,342,592 | 400,893 |
+| medium | 2,500 | 10,104 | 0.049382 s | 0.099503 s | 0.033427 s | 0.182025 s | 49,643,520 | 4,016,337 |
+| large | 10,000 | 40,404 | 0.195897 s | 1.061731 s | 0.152839 s | 1.415386 s | 103,907,328 | 16,117,083 |
+
+The reference samples contain no benchmark failures. Load/parse and report size remain close to
+input-linear across these scales, while normalize/correlate becomes the dominant phase at the
+large scale (median 1.061731 s of 1.415386 s total). This is a measured baseline characteristic,
+not an optimization requirement or performance promise.
+
+The retained 60-minute soak uses the medium dataset in one long-lived Python process with one
+iteration scheduled per second and resource sampling every 60 seconds. It completed 3,601 of 3,601
+iterations successfully in 3,600.257 seconds. The final report remained complete and compatible,
+with 10,104 input records, 10,100 timeline entries, three sources, zero diagnostics, and a
+4,016,337-byte JSON report. Median iteration wall time was approximately 0.2444 seconds; the 95th
+percentile was approximately 0.2573 seconds.
+
+Current RSS showed an early allocator/runtime transient: the post-first-cycle sample was
+47,595,520 bytes, current RSS reached 143,245,312 bytes at approximately two minutes, and the
+process-wide peak RSS reached 175,046,656 bytes. Current RSS then fell and stabilized; the final
+sample was 45,498,368 bytes (2,097,152 bytes below the post-first-cycle baseline), and the last
+30 minutes stayed within approximately 43.33--43.39 MiB. The observed run therefore does not show
+monotonic resource growth after the initial transient. That observation is limited to this fixed
+dataset, environment, duration, and commit and must not be generalized into a reliability claim.
+
+Retained raw evidence:
+
+- [`docs/evidence/session-inspection-benchmark-6cd9aec.json`](evidence/session-inspection-benchmark-6cd9aec.json)
+  (`sha256:6ef5972a80dabc1d63a8be5198ff6a34137b882b7b5c67b5fffc4030dd48a559`);
+- [`docs/evidence/session-inspection-soak-6cd9aec-60m.json`](evidence/session-inspection-soak-6cd9aec-60m.json)
+  (`sha256:fb42cc4b43d3d10fb6123a010e1fbca81f015966dc67f5207f2de884036962d3`).
+
+Reproduce deterministic datasets and the benchmark from a clean checkout of the measured commit:
+
+```bash
+python_cmd="$PWD/.venv/bin/python"
+mkdir -p .local/issue42
+
+for scale in small medium large; do
+  "$python_cmd" scripts/session_inspection_benchmark.py generate \
+    --scale "$scale" \
+    --output-dir ".local/issue42/dataset-$scale"
+done
+
+"$python_cmd" scripts/session_inspection_benchmark.py benchmark \
+  --scales small medium large \
+  --samples 5 \
+  --warmups 1 \
+  --output .local/issue42/session-inspection-benchmark.json
+
+"$python_cmd" scripts/session_inspection_benchmark.py validate \
+  .local/issue42/session-inspection-benchmark.json
+```
+
+Run the qualifying local soak separately; it is intentionally not part of normal PR CI:
+
+```bash
+"$python_cmd" scripts/session_inspection_soak.py run \
+  --scale medium \
+  --duration-seconds 3600 \
+  --iteration-interval-seconds 1 \
+  --resource-sample-interval-seconds 60 \
+  --output .local/issue42/session-inspection-soak-60m.json
+
+"$python_cmd" scripts/session_inspection_soak.py validate \
+  .local/issue42/session-inspection-soak-60m.json
+```
+
+On macOS, `caffeinate -i` may wrap the soak command to prevent idle sleep. It is not part of the
+measured OrbitOps process. Keep the checkout clean while producing reference evidence so the
+recorded commit SHA identifies the code actually exercised.
+
 ## Validation
 
 The repository validates:

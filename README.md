@@ -179,6 +179,16 @@ filters cover packet-sequence bounds, exact alarm code, alarm severity, and an e
 limit. See the [session-inspection contract](docs/session-inspection.md) for report semantics,
 atomic output behavior, compatibility boundaries, and exit codes.
 
+Reference performance and long-running evidence for the inspector is retained in the repository:
+
+- [raw benchmark JSON](docs/evidence/session-inspection-benchmark-6cd9aec.json);
+- [raw 60-minute soak JSON](docs/evidence/session-inspection-soak-6cd9aec-60m.json).
+
+These measurements establish a reproducible baseline on one documented machine; they are not
+cross-platform performance guarantees or reliability claims. See
+[performance and soak evidence](docs/session-inspection.md#performance-and-soak-evidence) for the
+reference interpretation and exact reproduction/validation commands.
+
 ## Alarm-policy workflow
 
 List the stable built-in catalog:
