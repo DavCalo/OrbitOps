@@ -16,14 +16,17 @@ from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import TypeAlias, cast
 
-from orbitops.session import inspect_session
-from orbitops.session.reporting import (
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / "ground_station"))
+
+from orbitops.session import inspect_session  # noqa: E402
+from orbitops.session.reporting import (  # noqa: E402
     REPORT_FORMAT,
     REPORT_FORMAT_VERSION,
     project_session_report,
     render_session_report_json,
 )
-from session_benchmark_support import (
+from session_benchmark_support import (  # noqa: E402
     DATASET_FORMAT,
     DATASET_FORMAT_VERSION,
     DATASET_SCALES,
@@ -41,7 +44,6 @@ from session_benchmark_support import (
 SOAK_FORMAT = "orbitops.session_inspection_soak"
 SOAK_FORMAT_VERSION = 1
 REFERENCE_SOAK_MINIMUM_SECONDS = 60.0 * 60.0
-ROOT = Path(__file__).resolve().parents[1]
 JsonObject: TypeAlias = dict[str, object]
 
 

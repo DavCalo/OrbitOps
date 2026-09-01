@@ -6,13 +6,16 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from orbitops.session import inspect_session
-from orbitops.session.inspection import _load_session_evidence, _normalize_loaded_session
-
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPTS = ROOT / "scripts"
+sys.path.insert(0, str(ROOT / "ground_station"))
 sys.path.insert(0, str(SCRIPTS))
 
+from orbitops.session import inspect_session  # noqa: E402
+from orbitops.session.inspection import (  # noqa: E402
+    _load_session_evidence,
+    _normalize_loaded_session,
+)
 from session_benchmark_support import (  # noqa: E402
     DATASET_SCALES,
     dataset_paths,
