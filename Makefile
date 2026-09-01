@@ -1,4 +1,4 @@
-.PHONY: alarm-demo bootstrap build clean configure integration link-demo package profile-demo python-tests quality session-demo test verify
+.PHONY: alarm-demo bootstrap build clean configure integration link-demo package profile-demo python-tests quality session-benchmark-smoke session-demo test verify
 
 PYTHON ?= python3
 CMAKE ?= cmake
@@ -43,6 +43,9 @@ alarm-demo: build
 session-demo: build
 	$(PYTHON) scripts/session_demo_check.py ./$(BUILD_DIR)/orbitops_sim
 
+session-benchmark-smoke:
+	$(PYTHON) scripts/session_inspection_benchmark.py smoke
+
 quality:
 	$(PYTHON) -m ruff check .
 	$(PYTHON) -m ruff format --check .
@@ -59,7 +62,7 @@ package:
 	$(PYTHON) scripts/alarm_event_package_check.py
 	$(PYTHON) scripts/session_inspection_package_check.py
 
-verify: quality test integration package
+verify: quality test integration package session-benchmark-smoke
 
 clean:
 	rm -rf $(BUILD_DIR) dist .coverage .mypy_cache .ruff_cache

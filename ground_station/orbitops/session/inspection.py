@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections import defaultdict
 from collections.abc import Callable, Mapping, Sequence
+from dataclasses import dataclass
 from itertools import pairwise
 from pathlib import Path
 from typing import TypeVar
@@ -47,6 +48,18 @@ _LINK_CONTEXT_TYPES = frozenset(
         link_event_contract.LinkEventType.RUN_SUMMARY,
     }
 )
+
+
+@dataclass(frozen=True, slots=True)
+class _LoadedSessionEvidence:
+    """Strictly loaded source records before normalization and correlation."""
+
+    telemetry_path: Path | None
+    telemetry_records: tuple[RecordedTelemetryRecord, ...] | None
+    alarm_events_path: Path | None
+    alarm_records: tuple[alarm_event_contract.AlarmEvent, ...] | None
+    link_events_path: Path | None
+    link_records: tuple[link_event_contract.LinkEvent, ...] | None
 
 
 def _require_optional_path(name: str, value: object) -> Path | None:
@@ -521,19 +534,13 @@ def _missing_lane_summary(lane: EvidenceLane) -> tuple[LaneSummary, Diagnostic]:
     return summary, diagnostic
 
 
-def inspect_session(
+def _load_session_evidence(
     *,
     telemetry_path: Path | None = None,
     link_events_path: Path | None = None,
     alarm_events_path: Path | None = None,
-) -> NormalizedSession:
-    """Build one deterministic normalized session from selected evidence sources.
-
-    Each input is optional, but at least one source must be selected. Missing lanes
-    remain explicit and incomplete in the normalized model. Malformed source content
-    raises :class:`MalformedEvidenceError`; filesystem failures remain ``OSError``
-    instances so callers can distinguish input/output failures from malformed data.
-    """
+) -> _LoadedSessionEvidence:
+    """Load and strictly validate selected evidence without normalizing it."""
 
     telemetry = _require_optional_path("telemetry_path", telemetry_path)
     link = _require_optional_path("link_events_path", link_events_path)
@@ -541,6 +548,49 @@ def inspect_session(
     if telemetry is None and link is None and alarm is None:
         raise ValueError("at least one evidence source must be provided")
 
+    telemetry_records = (
+        None
+        if telemetry is None
+        else _load_strict(EvidenceLane.TELEMETRY, telemetry, load_telemetry_records)
+    )
+    alarm_records = (
+        None
+        if alarm is None
+        else _load_strict(EvidenceLane.ALARM, alarm, alarm_event_contract.load_alarm_events)
+    )
+    link_records = (
+        None
+        if link is None
+        else _load_strict(EvidenceLane.LINK, link, link_event_contract.load_link_events)
+    )
+    if (
+        link is not None
+        and link_records
+        and link_records[-1].event_type is link_event_contract.LinkEventType.RUN_SUMMARY
+    ):
+        try:
+            link_statistics_contract.validate_run_summary(link_records)
+        except (TypeError, ValueError) as exc:
+            raise MalformedEvidenceError(
+                f"invalid link evidence in {_source_name(link)!r}: {exc}",
+                lane=EvidenceLane.LINK,
+                source_name=str(link),
+            ) from exc
+
+    return _LoadedSessionEvidence(
+        telemetry_path=telemetry,
+        telemetry_records=telemetry_records,
+        alarm_events_path=alarm,
+        alarm_records=alarm_records,
+        link_events_path=link,
+        link_records=link_records,
+    )
+
+
+def _normalize_loaded_session(evidence: _LoadedSessionEvidence) -> NormalizedSession:
+    """Normalize one strictly loaded evidence bundle into the production session model."""
+
+    telemetry = evidence.telemetry_path
     if telemetry is None:
         telemetry_summary, telemetry_missing = _missing_lane_summary(EvidenceLane.TELEMETRY)
         telemetry_timeline: list[TimelineEntry] = []
@@ -548,11 +598,9 @@ def inspect_session(
         decoded_sequences: tuple[int, ...] = ()
         decoded_source_indices: tuple[int, ...] = ()
     else:
-        telemetry_records = _load_strict(
-            EvidenceLane.TELEMETRY,
-            telemetry,
-            load_telemetry_records,
-        )
+        telemetry_records = evidence.telemetry_records
+        if telemetry_records is None:
+            raise AssertionError("loaded telemetry path is missing records")
         (
             telemetry_summary,
             telemetry_timeline,
@@ -561,16 +609,15 @@ def inspect_session(
             decoded_source_indices,
         ) = _normalize_telemetry(telemetry, telemetry_records)
 
+    alarm = evidence.alarm_events_path
     if alarm is None:
         alarm_summary, alarm_missing = _missing_lane_summary(EvidenceLane.ALARM)
         alarm_timeline: list[TimelineEntry] = []
         alarm_diagnostics = [alarm_missing]
     else:
-        alarm_records = _load_strict(
-            EvidenceLane.ALARM,
-            alarm,
-            alarm_event_contract.load_alarm_events,
-        )
+        alarm_records = evidence.alarm_records
+        if alarm_records is None:
+            raise AssertionError("loaded alarm path is missing records")
         alarm_summary, alarm_timeline, alarm_diagnostics = _normalize_alarm(
             alarm,
             alarm_records,
@@ -578,28 +625,15 @@ def inspect_session(
             decoded_source_indices,
         )
 
+    link = evidence.link_events_path
     if link is None:
         link_summary, link_missing = _missing_lane_summary(EvidenceLane.LINK)
         link_timeline: list[TimelineEntry] = []
         link_diagnostics = [link_missing]
     else:
-        link_records = _load_strict(
-            EvidenceLane.LINK,
-            link,
-            link_event_contract.load_link_events,
-        )
-        if (
-            link_records
-            and link_records[-1].event_type is link_event_contract.LinkEventType.RUN_SUMMARY
-        ):
-            try:
-                link_statistics_contract.validate_run_summary(link_records)
-            except (TypeError, ValueError) as exc:
-                raise MalformedEvidenceError(
-                    f"invalid link evidence in {_source_name(link)!r}: {exc}",
-                    lane=EvidenceLane.LINK,
-                    source_name=str(link),
-                ) from exc
+        link_records = evidence.link_records
+        if link_records is None:
+            raise AssertionError("loaded link path is missing records")
         link_summary, link_timeline, link_diagnostics = _normalize_link(link, link_records)
 
     timeline = tuple(
@@ -619,3 +653,25 @@ def inspect_session(
         timeline,
         diagnostics,
     )
+
+
+def inspect_session(
+    *,
+    telemetry_path: Path | None = None,
+    link_events_path: Path | None = None,
+    alarm_events_path: Path | None = None,
+) -> NormalizedSession:
+    """Build one deterministic normalized session from selected evidence sources.
+
+    Each input is optional, but at least one source must be selected. Missing lanes
+    remain explicit and incomplete in the normalized model. Malformed source content
+    raises :class:`MalformedEvidenceError`; filesystem failures remain ``OSError``
+    instances so callers can distinguish input/output failures from malformed data.
+    """
+
+    evidence = _load_session_evidence(
+        telemetry_path=telemetry_path,
+        link_events_path=link_events_path,
+        alarm_events_path=alarm_events_path,
+    )
+    return _normalize_loaded_session(evidence)
