@@ -186,7 +186,7 @@ Before the v0.5.0 release PR is considered ready:
 - [x] external walkthrough completed and recorded with genuine findings or a clean outcome;
 - [x] walkthrough findings resolved and independently retested on commit `757e2989dadfb1f782796ea0c00d7f137abdaa3d`;
 - [x] README and focused docs agree with the public CLI and current roadmap;
-- [ ] compatibility, operations, threat-model, known-limit, and security language reviewed;
+- [x] compatibility, operations, threat-model, known-limit, and security language reviewed;
 - [x] raw benchmark and 60-minute soak evidence remain retained with valid checksums;
 - [x] Python reports `0.5.0`;
 - [x] C++ simulator reports `0.5.0`;
@@ -195,8 +195,8 @@ Before the v0.5.0 release PR is considered ready:
 - [x] installed session-inspection workflow passes from the built artifact;
 - [x] fresh-clone maintainer `make verify` passes on the release candidate;
 - [x] changelog and release notes describe v0.5.0 without unsupported claims;
-- [ ] all seven required CI checks are green;
-- [ ] no unresolved `release blocker` remains other than issue #43 itself.
+- [x] all seven required CI checks are green;
+- [x] no unresolved `release blocker` remains other than issue #43 itself.
 
 The release PR must reference issue #43 without auto-closing it; do not use `Closes #43` or an
 equivalent closing keyword. Issue #43 remains the release blocker until publication verification.
