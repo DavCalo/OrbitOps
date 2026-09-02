@@ -110,10 +110,15 @@ python -m pip install -e .
 orbitops --version
 ```
 
+This installs the runtime CLI only. Maintainer quality and release gates use the development
+toolchain installed by `make bootstrap`; see [Engineering quality](#engineering-quality).
+
 ### 2. Build the on-board simulator
 
 ```bash
-cmake -S onboard -B build       -DCMAKE_BUILD_TYPE=Release       -DORBITOPS_WARNINGS_AS_ERRORS=ON
+cmake -S onboard -B build \
+  -DCMAKE_BUILD_TYPE=Release \
+  -DORBITOPS_WARNINGS_AS_ERRORS=ON
 cmake --build build
 
 ./build/orbitops_sim --version
@@ -179,6 +184,21 @@ filters cover packet-sequence bounds, exact alarm code, alarm severity, and an e
 limit. See the [session-inspection contract](docs/session-inspection.md) for report semantics,
 atomic output behavior, compatibility boundaries, and exit codes.
 
+A small supported sample bundle is committed under [`examples/session-inspection/`](examples/session-inspection/).
+It is synthetic, contains no private telemetry, and is regression-checked against the production
+inspector. Inspect it directly with:
+
+```bash
+orbitops session inspect \
+  --telemetry examples/session-inspection/telemetry.jsonl \
+  --link-events examples/session-inspection/link-events.jsonl \
+  --alarm-events examples/session-inspection/alarm-events.jsonl
+```
+
+The sample should report `complete compatible`, three evidence sources, five normalized timeline
+entries, and one link-corruption diagnostic. Its fixed fingerprints are illustrative metadata,
+not signatures or provenance proofs.
+
 Reference performance and long-running evidence for the inspector is retained in the repository:
 
 - [raw benchmark JSON](docs/evidence/session-inspection-benchmark-6cd9aec.json);
@@ -212,13 +232,23 @@ orbitops alarm-policy validate file:policies/lab-policy.toml
 Record a direct thermal pass:
 
 ```bash
-orbitops listen       --host 127.0.0.1       --port 9000       --alarm-policy thermal-demo       --record sessions/thermal-telemetry.jsonl       --alarm-log sessions/thermal-alarms.jsonl
+orbitops listen \
+  --host 127.0.0.1 \
+  --port 9000 \
+  --alarm-policy thermal-demo \
+  --record sessions/thermal-telemetry.jsonl \
+  --alarm-log sessions/thermal-alarms.jsonl
 ```
 
 In another terminal:
 
 ```bash
-./build/orbitops_sim       --host 127.0.0.1       --port 9000       --interval-ms 100       --packets 52       --scenario thermal
+./build/orbitops_sim \
+  --host 127.0.0.1 \
+  --port 9000 \
+  --interval-ms 100 \
+  --packets 52 \
+  --scenario thermal
 ```
 
 Stop the listener with `Ctrl+C` after the simulator completes. Cooperative shutdown writes the
@@ -275,7 +305,12 @@ orbitops profile validate file:profiles/lab-pass.toml
 Run the link emulator from a profile:
 
 ```bash
-orbitops link       --profile degraded-link       --listen-port 9001       --forward-port 9000       --event-log sessions/degraded-link-events.jsonl       --session-id degraded-pass
+orbitops link \
+  --profile degraded-link \
+  --listen-port 9001 \
+  --forward-port 9000 \
+  --event-log sessions/degraded-link-events.jsonl \
+  --session-id degraded-pass
 ```
 
 Explicit impairment options override the profile, including zero. A short reference may select
@@ -287,19 +322,36 @@ explicit.
 Terminal 1 — ground station:
 
 ```bash
-orbitops listen       --host 127.0.0.1       --port 9000       --alarm-policy conservative       --record sessions/mission-telemetry.jsonl       --alarm-log sessions/mission-alarms.jsonl
+orbitops listen \
+  --host 127.0.0.1 \
+  --port 9000 \
+  --alarm-policy conservative \
+  --record sessions/mission-telemetry.jsonl \
+  --alarm-log sessions/mission-alarms.jsonl
 ```
 
 Terminal 2 — deterministic link emulator:
 
 ```bash
-orbitops link       --profile degraded-link       --listen-host 127.0.0.1       --listen-port 9001       --forward-host 127.0.0.1       --forward-port 9000       --event-log sessions/mission-link-events.jsonl       --session-id mission-pass
+orbitops link \
+  --profile degraded-link \
+  --listen-host 127.0.0.1 \
+  --listen-port 9001 \
+  --forward-host 127.0.0.1 \
+  --forward-port 9000 \
+  --event-log sessions/mission-link-events.jsonl \
+  --session-id mission-pass
 ```
 
 Terminal 3 — on-board thermal scenario:
 
 ```bash
-./build/orbitops_sim       --host 127.0.0.1       --port 9001       --interval-ms 500       --packets 80       --scenario thermal
+./build/orbitops_sim \
+  --host 127.0.0.1 \
+  --port 9001 \
+  --interval-ms 500 \
+  --packets 80 \
+  --scenario thermal
 ```
 
 The pass demonstrates deterministic impairments, state transitions, lifecycle alarms, sequence
@@ -387,7 +439,8 @@ fuzzing remains separate from the normal pull-request budget.
 
 ## Engineering quality
 
-Install development tools and run the complete local gate:
+The quick-start install above is intentionally runtime-only. Maintainers install the development
+toolchain and run the complete local gate with:
 
 ```bash
 make bootstrap
@@ -411,6 +464,7 @@ session-inspection workflow.
 │   ├── profiles/                    # Profile schema, resolver, catalog, resources
 │   └── session/                     # Correlation, normalization, reports, public CLI
 ├── tests/                           # Unit, compatibility, parser, CLI, runtime tests
+├── examples/session-inspection/     # Small supported synthetic evidence bundle
 ├── docs/                            # Architecture, ADRs, operations, security, schemas
 ├── scripts/                         # Installed demos and package/integration checks
 └── .github/                         # CI, dependency updates, templates, ownership
@@ -418,11 +472,12 @@ session-inspection workflow.
 
 ## Roadmap
 
-### Near term
+### v0.5.0 release readiness
 
-- complete the unified session-inspection operator demo;
-- publish reproducible benchmark and soak evidence;
-- finish release documentation and clean-install verification.
+The unified session-inspection demo and reproducible benchmark/soak evidence are complete. The
+remaining v0.5.0 work is release hardening: external usability walkthrough, focused documentation
+review, Python/C++ version alignment, release-candidate validation, and published-install
+verification. See the [release-readiness checklist](docs/release-readiness.md).
 
 ### Product experience
 
