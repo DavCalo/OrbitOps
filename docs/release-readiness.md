@@ -203,10 +203,36 @@ equivalent closing keyword. Issue #43 remains the release blocker until publicat
 
 After the release PR is merged, publication remains a maintainer action:
 
-- [ ] synchronize `main` with `--ff-only` and verify the merged tree;
-- [ ] create the `v0.5.0` tag/release from the maintainer account;
-- [ ] verify the published install/artifact and both public version surfaces;
+- [x] synchronize `main` with `--ff-only` and verify the merged tree;
+- [x] create the `v0.5.0` tag/release from the maintainer account;
+- [x] verify the published install/artifact and both public version surfaces;
 - [ ] close issue #43, epic #37, and the milestone only after publication verification.
+
+## Published release verification — 2 September 2026
+
+OrbitOps v0.5.0 was published from annotated tag `v0.5.0`, targeting commit
+`1eed95497aacca1359c7613a5fc6ea9ad086bc99`.
+
+The GitHub Release was published at `2026-09-02T17:23:44Z` with these assets:
+
+- `orbitops_ground_station-0.5.0-py3-none-any.whl`
+  — SHA-256 `632fd2278c6101ecb632c1e391fe0ab654056a0143a485d5c586950400b4cbda`;
+- `orbitops_ground_station-0.5.0.tar.gz`
+  — SHA-256 `77acff4b7015e1740dffe51cefb440d9163d693826e072de22ab423b7c4c9d59`;
+- `SHA256SUMS.txt`.
+
+Publication verification downloaded the release assets again from GitHub and confirmed:
+
+- both published artifact checksums match;
+- the published wheel installs into a fresh virtual environment;
+- the installed CLI reports `orbitops 0.5.0`;
+- the supported session-inspection sample passes using the published wheel;
+- installed alarm-event and session-inspection package checks pass;
+- a fresh checkout of tag `v0.5.0` resolves to the intended release commit;
+- the C++ simulator builds from that tag and reports `orbitops_sim 0.5.0`.
+
+The publication gate is therefore complete. Issue #43, epic #37, and milestone v0.5.0 may now
+be closed in that order.
 
 ## Boundaries to re-check
 
