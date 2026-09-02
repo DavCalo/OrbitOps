@@ -16,7 +16,9 @@ python3 -m venv .venv
 source .venv/bin/activate
 python -m pip install -e ".[dev]"
 
-cmake -S onboard -B build       -DCMAKE_BUILD_TYPE=Release       -DORBITOPS_WARNINGS_AS_ERRORS=ON
+cmake -S onboard -B build \
+  -DCMAKE_BUILD_TYPE=Release \
+  -DORBITOPS_WARNINGS_AS_ERRORS=ON
 cmake --build build
 ```
 
@@ -26,7 +28,7 @@ cmake --build build
 make alarm-demo
 ```
 
-This v0.4.0 target:
+This target:
 
 1. builds or locates the C++ simulator;
 2. invokes the installed `orbitops` executable;
@@ -53,7 +55,14 @@ and `make link-demo`.
 ```bash
 orbitops alarm-policy list
 orbitops alarm-policy show thermal-demo
-orbitops alarm-policy validate file:policies/lab-policy.toml
+orbitops alarm-policy validate thermal-demo
+```
+
+The commands above are directly runnable from a fresh clone. For an external policy, replace the
+following illustrative path with a file that actually exists:
+
+```bash
+orbitops alarm-policy validate file:/path/to/lab-policy.toml
 ```
 
 Reference forms:
@@ -67,14 +76,29 @@ Ambiguous short references are rejected before the receiver binds UDP or creates
 
 ## Record a manual thermal alarm pass
 
+This direct path uses two terminals: Terminal 1 runs the receiving ground station and Terminal 2
+runs the spacecraft simulator that sends packets to it.
+
+Terminal 1:
+
 ```bash
-orbitops listen       --host 127.0.0.1       --port 9000       --alarm-policy thermal-demo       --record sessions/thermal-telemetry.jsonl       --alarm-log sessions/thermal-alarms.jsonl
+orbitops listen \
+  --host 127.0.0.1 \
+  --port 9000 \
+  --alarm-policy thermal-demo \
+  --record sessions/thermal-telemetry.jsonl \
+  --alarm-log sessions/thermal-alarms.jsonl
 ```
 
-In another terminal:
+Terminal 2:
 
 ```bash
-./build/orbitops_sim       --host 127.0.0.1       --port 9000       --interval-ms 100       --packets 52       --scenario thermal
+./build/orbitops_sim \
+  --host 127.0.0.1 \
+  --port 9000 \
+  --interval-ms 100 \
+  --packets 52 \
+  --scenario thermal
 ```
 
 Stop the listener with `Ctrl+C` after the simulator completes. Cooperative shutdown writes the
@@ -101,6 +125,23 @@ A complete stream begins with policy-aware `run_metadata` and ends with `run_sum
 Transition records contain packet sequence, stable identity, code, severity, observed value,
 and threshold.
 
+## Inspect a unified session
+
+Use the supported synthetic bundle to exercise the public inspector without first recording a new
+run:
+
+```bash
+orbitops session inspect \
+  --telemetry examples/session-inspection/telemetry.jsonl \
+  --link-events examples/session-inspection/link-events.jsonl \
+  --alarm-events examples/session-inspection/alarm-events.jsonl
+```
+
+The inspector validates each source independently, preserves source-local ordering and clock
+domains, and reports diagnostics without inventing cross-stream provenance. The bundled example is
+expected to be complete and compatible with three sources, five normalized timeline entries, and
+one intentional link-corruption diagnostic.
+
 ## One-command mission-profile demo
 
 ```bash
@@ -113,22 +154,43 @@ fingerprint, forwarded packets, and final counters.
 
 ## Run a profile-driven linked session
 
+This path uses three terminals: Terminal 1 receives telemetry, Terminal 2 applies deterministic link
+impairments and forwards packets to Terminal 1, and Terminal 3 runs the spacecraft simulator that
+sends packets to Terminal 2.
+
 Terminal 1:
 
 ```bash
-orbitops listen       --host 127.0.0.1       --port 9000       --alarm-policy conservative       --record sessions/telemetry.jsonl       --alarm-log sessions/alarm-events.jsonl
+orbitops listen \
+  --host 127.0.0.1 \
+  --port 9000 \
+  --alarm-policy conservative \
+  --record sessions/telemetry.jsonl \
+  --alarm-log sessions/alarm-events.jsonl
 ```
 
 Terminal 2:
 
 ```bash
-orbitops link       --profile degraded-link       --listen-host 127.0.0.1       --listen-port 9001       --forward-host 127.0.0.1       --forward-port 9000       --event-log sessions/link-events.jsonl       --session-id local-profile-pass
+orbitops link \
+  --profile degraded-link \
+  --listen-host 127.0.0.1 \
+  --listen-port 9001 \
+  --forward-host 127.0.0.1 \
+  --forward-port 9000 \
+  --event-log sessions/link-events.jsonl \
+  --session-id local-profile-pass
 ```
 
 Terminal 3:
 
 ```bash
-./build/orbitops_sim       --host 127.0.0.1       --port 9001       --interval-ms 500       --packets 80       --scenario thermal
+./build/orbitops_sim \
+  --host 127.0.0.1 \
+  --port 9001 \
+  --interval-ms 500 \
+  --packets 80 \
+  --scenario thermal
 ```
 
 The simulator targets the link listener, not the ground-station port.
@@ -159,8 +221,10 @@ Do not place secrets in session identifiers, profile names, policy names, or loc
 External references may reveal directory names. Alarm logs may reveal sequence numbers,
 observed operational values, thresholds, modes, and human-readable messages.
 
-Fingerprints are not authentication or provenance mechanisms. Anyone able to modify a policy
-or log can replace both data and fingerprint.
+A fingerprint is a SHA-256 identifier of behavior-affecting configuration or policy values used
+for reproducibility; it is not personal or biometric information. Fingerprints are not
+authentication or provenance mechanisms. Anyone able to modify a policy or log can replace both
+data and fingerprint.
 
 ## Finite and interrupted runs
 

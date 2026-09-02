@@ -1,0 +1,4 @@
+{"attributes":{"configuration_fingerprint":"sha256:2222222222222222222222222222222222222222222222222222222222222222","profile_name":"nominal","profile_reference":"sample/nominal","profile_schema_version":1},"elapsed_ns":0,"event_index":0,"event_type":"run_metadata","packet_index":null,"schema_version":2,"session_id":"sample-link"}
+{"attributes":{},"elapsed_ns":5,"event_index":1,"event_type":"packet_received","packet_index":0,"schema_version":2,"session_id":"sample-link"}
+{"attributes":{},"elapsed_ns":6,"event_index":2,"event_type":"packet_corrupted","packet_index":0,"schema_version":2,"session_id":"sample-link"}
+{"attributes":{"deliveries_forwarded":0,"deliveries_scheduled":0,"packets_corrupted":1,"packets_delayed":0,"packets_dropped":0,"packets_duplicated":0,"packets_received":1,"packets_reordered":0},"elapsed_ns":7,"event_index":3,"event_type":"run_summary","packet_index":null,"schema_version":2,"session_id":"sample-link"}

@@ -4,6 +4,8 @@ All notable changes to OrbitOps are documented here. The project follows Semanti
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-09-02
+
 ### Added
 
 - explicit session-correlation semantics that preserve source-local clocks, order, and identity
@@ -22,6 +24,17 @@ All notable changes to OrbitOps are documented here. The project follows Semanti
   measurements plus a bounded CI smoke workload;
 - retained raw reference benchmark and 60-minute single-process soak evidence with periodic resource
   samples, validated final summaries, reproduction commands, and explicit baseline-only caveats.
+- a small supported synthetic session-inspection bundle under `examples/session-inspection/`, with a
+  regression check that exercises the public inspector from a source checkout;
+- a v0.5.0 release-readiness checklist that separates new-user onboarding, maintainer validation,
+  external walkthrough evidence, installed-artifact checks, and publication verification.
+
+### Changed
+
+- updated Python, C++, package-check, README badge, and committed session-demo visual version
+  surfaces to `0.5.0`;
+- refreshed operations and release documentation around unified inspection, installed-wheel
+  validation, compatibility boundaries, and publication verification.
 
 ### Fixed
 

@@ -10,7 +10,7 @@
   </a>
   <img src="https://img.shields.io/badge/C%2B%2B-17-00599C?style=flat-square&logo=c%2B%2B&logoColor=white" alt="C++17" />
   <img src="https://img.shields.io/badge/Python-3.11--3.13-3776AB?style=flat-square&logo=python&logoColor=FFD43B" alt="Python 3.11 to 3.13" />
-  <img src="https://img.shields.io/badge/Version-0.4.0-0F766E?style=flat-square" alt="OrbitOps version 0.4.0" />
+  <img src="https://img.shields.io/badge/Version-0.5.0-0F766E?style=flat-square" alt="OrbitOps version 0.5.0" />
   <a href="LICENSE">
     <img src="https://img.shields.io/badge/License-MIT-334155?style=flat-square" alt="MIT license" />
   </a>
@@ -27,7 +27,8 @@ versioned JSON reports from the independently validated telemetry, link, and ala
 
 Versioned TOML mission profiles make link scenarios reusable. Versioned alarm policies make
 thresholds and hysteresis explicit. Link and alarm logs begin with the effective configuration
-or policy identity and a SHA-256 fingerprint of behavior-affecting values.
+or policy identity and a SHA-256 fingerprint of behavior-affecting values. A fingerprint here is a
+reproducibility identifier for those values, not personal or biometric information.
 
 > [!IMPORTANT]
 > OrbitOps is a technical-preview simulator and portfolio project. It is **not flight
@@ -110,10 +111,15 @@ python -m pip install -e .
 orbitops --version
 ```
 
+This installs the runtime CLI only. Maintainer quality and release gates use the development
+toolchain installed by `make bootstrap`; see [Engineering quality](#engineering-quality).
+
 ### 2. Build the on-board simulator
 
 ```bash
-cmake -S onboard -B build       -DCMAKE_BUILD_TYPE=Release       -DORBITOPS_WARNINGS_AS_ERRORS=ON
+cmake -S onboard -B build \
+  -DCMAKE_BUILD_TYPE=Release \
+  -DORBITOPS_WARNINGS_AS_ERRORS=ON
 cmake --build build
 
 ./build/orbitops_sim --version
@@ -130,7 +136,14 @@ This installed workflow runs the C++ thermal simulator through the deterministic
 and alarm transitions, then invokes `orbitops session inspect` to produce one bounded operator
 report.
 
+The demo is terminal-only; it does not launch a graphical application. The image below is a static
+visualization generated from validated CLI output.
+
 ![OrbitOps deterministic session-inspection demo](docs/assets/session-demo.svg)
+
+For a first read, confirm three things in the terminal output: `status: complete compatible`, the
+`SUMMARY` source/diagnostic counts, and the final `session inspection demo ok` line. `DIAGNOSTICS`
+and `TIMELINE` provide the deeper evidence when you need to understand why a run looks unusual.
 
 What to notice:
 
@@ -144,16 +157,52 @@ What to notice:
 The visual is generated from validated real demo output. Dynamic ports, temporary paths, run
 identifiers, and timestamps are omitted from the static representation.
 
-Focused workflows remain available:
+Focused workflows remain available when you want a narrower demonstration:
 
 ```bash
 make alarm-demo
 make profile-demo
 ```
 
+`alarm-demo` focuses on alarm lifecycle transitions. `profile-demo` focuses on deterministic
+mission-profile/link behavior. `session-demo` combines the simulator, link emulator, ground station,
+and all three evidence lanes into the unified inspector report.
+
 ## Session-inspection workflow
 
-Inspect any supported combination of telemetry, link-event, and alarm-event evidence:
+`orbitops session inspect` combines selected telemetry, link-event, and alarm-event files into one
+operator report. If you are new to OrbitOps, start with the committed sample bundle. It is
+synthetic, contains no private telemetry, and is regression-checked against the production inspector:
+
+```bash
+orbitops session inspect \
+  --telemetry examples/session-inspection/telemetry.jsonl \
+  --link-events examples/session-inspection/link-events.jsonl \
+  --alarm-events examples/session-inspection/alarm-events.jsonl
+```
+
+The sample should report `complete compatible`, three evidence sources, five normalized timeline
+entries, and one link-corruption diagnostic.
+
+Read a session report in this order:
+
+1. `status` and `evidence` tell you whether the selected files are structurally usable and what the
+   inspector can and cannot claim about them;
+2. `SUMMARY` and `SOURCES` show the evidence lanes and their whole-session counters;
+3. `DIAGNOSTICS` calls out gaps, corruption, incompatibility, or truncation that deserves attention;
+4. `TIMELINE` is the detailed source-local evidence to inspect after a diagnostic or counter points
+   to something interesting.
+
+`evidence: operator-selected bundle; cross-stream provenance unverified` means OrbitOps validates
+each selected file under its own contract, but does not cryptographically prove that independently
+selected streams came from the same run. A fingerprint is a SHA-256 identifier of the effective
+configuration or policy used for reproducibility; it is not personal data, a signature, or a
+provenance proof.
+
+To inspect files generated by a mission pass, first complete the
+[manual profile-driven mission pass](#manual-profile-driven-mission-pass) below (or substitute paths
+to evidence files you already have). The `sessions/mission-*.jsonl` files are outputs of that
+workflow; they are not shipped inputs in a fresh clone:
 
 ```bash
 orbitops session inspect \
@@ -162,8 +211,7 @@ orbitops session inspect \
   --alarm-events sessions/mission-alarms.jsonl
 ```
 
-The default text report preserves source-local ordering and clock domains. Use deterministic,
-versioned JSON for automation:
+After those files exist, use deterministic, versioned JSON for automation:
 
 ```bash
 orbitops session inspect \
@@ -203,22 +251,40 @@ Inspect one policy and its effective fingerprint:
 orbitops alarm-policy show thermal-demo
 ```
 
-Validate an external UTF-8 TOML policy:
+Validate a shipped policy immediately:
 
 ```bash
-orbitops alarm-policy validate file:policies/lab-policy.toml
+orbitops alarm-policy validate thermal-demo
 ```
 
-Record a direct thermal pass:
+For your own external UTF-8 TOML policy, replace the path below with an existing file. The path is
+illustrative; OrbitOps does not ship `/path/to/lab-policy.toml`:
 
 ```bash
-orbitops listen       --host 127.0.0.1       --port 9000       --alarm-policy thermal-demo       --record sessions/thermal-telemetry.jsonl       --alarm-log sessions/thermal-alarms.jsonl
+orbitops alarm-policy validate file:/path/to/lab-policy.toml
+```
+
+Record a direct thermal pass. This is a two-terminal workflow: Terminal 1 runs the receiving ground
+station; Terminal 2 runs the spacecraft simulator that sends packets to it.
+
+```bash
+orbitops listen \
+  --host 127.0.0.1 \
+  --port 9000 \
+  --alarm-policy thermal-demo \
+  --record sessions/thermal-telemetry.jsonl \
+  --alarm-log sessions/thermal-alarms.jsonl
 ```
 
 In another terminal:
 
 ```bash
-./build/orbitops_sim       --host 127.0.0.1       --port 9000       --interval-ms 100       --packets 52       --scenario thermal
+./build/orbitops_sim \
+  --host 127.0.0.1 \
+  --port 9000 \
+  --interval-ms 100 \
+  --packets 52 \
+  --scenario thermal
 ```
 
 Stop the listener with `Ctrl+C` after the simulator completes. Cooperative shutdown writes the
@@ -266,16 +332,30 @@ inspectable partial log without one.
 
 ## Mission-profile workflow
 
+List, inspect, and validate a shipped profile:
+
 ```bash
 orbitops profile list
 orbitops profile show degraded-link
-orbitops profile validate file:profiles/lab-pass.toml
+orbitops profile validate degraded-link
+```
+
+For an external profile, replace the path below with an existing TOML file. The path is
+illustrative; OrbitOps does not ship `/path/to/lab-pass.toml`:
+
+```bash
+orbitops profile validate file:/path/to/lab-pass.toml
 ```
 
 Run the link emulator from a profile:
 
 ```bash
-orbitops link       --profile degraded-link       --listen-port 9001       --forward-port 9000       --event-log sessions/degraded-link-events.jsonl       --session-id degraded-pass
+orbitops link \
+  --profile degraded-link \
+  --listen-port 9001 \
+  --forward-port 9000 \
+  --event-log sessions/degraded-link-events.jsonl \
+  --session-id degraded-pass
 ```
 
 Explicit impairment options override the profile, including zero. A short reference may select
@@ -284,22 +364,43 @@ explicit.
 
 ## Manual profile-driven mission pass
 
+This three-terminal path makes the data flow explicit: Terminal 1 receives telemetry, Terminal 2
+sits between the spacecraft and ground station to apply deterministic link impairments, and Terminal
+3 runs the spacecraft simulator that sends packets into the link emulator.
+
 Terminal 1 — ground station:
 
 ```bash
-orbitops listen       --host 127.0.0.1       --port 9000       --alarm-policy conservative       --record sessions/mission-telemetry.jsonl       --alarm-log sessions/mission-alarms.jsonl
+orbitops listen \
+  --host 127.0.0.1 \
+  --port 9000 \
+  --alarm-policy conservative \
+  --record sessions/mission-telemetry.jsonl \
+  --alarm-log sessions/mission-alarms.jsonl
 ```
 
 Terminal 2 — deterministic link emulator:
 
 ```bash
-orbitops link       --profile degraded-link       --listen-host 127.0.0.1       --listen-port 9001       --forward-host 127.0.0.1       --forward-port 9000       --event-log sessions/mission-link-events.jsonl       --session-id mission-pass
+orbitops link \
+  --profile degraded-link \
+  --listen-host 127.0.0.1 \
+  --listen-port 9001 \
+  --forward-host 127.0.0.1 \
+  --forward-port 9000 \
+  --event-log sessions/mission-link-events.jsonl \
+  --session-id mission-pass
 ```
 
 Terminal 3 — on-board thermal scenario:
 
 ```bash
-./build/orbitops_sim       --host 127.0.0.1       --port 9001       --interval-ms 500       --packets 80       --scenario thermal
+./build/orbitops_sim \
+  --host 127.0.0.1 \
+  --port 9001 \
+  --interval-ms 500 \
+  --packets 80 \
+  --scenario thermal
 ```
 
 The pass demonstrates deterministic impairments, state transitions, lifecycle alarms, sequence
@@ -387,7 +488,8 @@ fuzzing remains separate from the normal pull-request budget.
 
 ## Engineering quality
 
-Install development tools and run the complete local gate:
+The quick-start install above is intentionally runtime-only. Maintainers install the development
+toolchain and run the complete local gate with:
 
 ```bash
 make bootstrap
@@ -411,6 +513,7 @@ session-inspection workflow.
 │   ├── profiles/                    # Profile schema, resolver, catalog, resources
 │   └── session/                     # Correlation, normalization, reports, public CLI
 ├── tests/                           # Unit, compatibility, parser, CLI, runtime tests
+├── examples/session-inspection/     # Small supported synthetic evidence bundle
 ├── docs/                            # Architecture, ADRs, operations, security, schemas
 ├── scripts/                         # Installed demos and package/integration checks
 └── .github/                         # CI, dependency updates, templates, ownership
@@ -418,11 +521,12 @@ session-inspection workflow.
 
 ## Roadmap
 
-### Near term
+### v0.5.0 release readiness
 
-- complete the unified session-inspection operator demo;
-- publish reproducible benchmark and soak evidence;
-- finish release documentation and clean-install verification.
+v0.5.0 consolidates unified session inspection, the flagship demo, retained benchmark/soak
+evidence, a supported synthetic sample bundle, and aligned Python/C++ version surfaces. Release
+validation, the external usability walkthrough, and publication checks are documented in the
+[release-readiness checklist](docs/release-readiness.md).
 
 ### Product experience
 
