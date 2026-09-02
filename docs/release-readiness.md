@@ -95,9 +95,41 @@ maintainer-only command transcript. The reviewer should use a fresh clone/enviro
 
 A clean outcome is valid evidence. Do not manufacture friction merely to produce findings.
 
-Technical release-candidate preparation may continue while this walkthrough is pending, but the
-release PR is not ready for merge and v0.5.0 must not be published until a real reviewer completes
-the walkthrough and any material findings are resolved and retested.
+### Walkthrough result — 2 September 2026
+
+An independent reviewer with no prior OrbitOps experience tested release-candidate commit
+`b052f9967f87572a4fd3ab665e2f602492e60a25` from a fresh clone on macOS. AppleClang
+21.0.0.21000101 was recorded; Python and CMake versions were not recorded. The reviewer reached the
+first successful demo in approximately 11–12 minutes and reported roughly 40–45 minutes of active
+walkthrough time.
+
+The runtime CLI and C++ simulator both reported `0.5.0`. The supported sample bundle and flagship
+session demo passed. The reviewer also successfully exercised the focused alarm/profile demos,
+built-in alarm-policy commands, and manual multi-terminal workflows. Attempts to run generated-file
+and illustrative external-file examples exposed the documentation findings below.
+
+The walkthrough found documentation/usability friction rather than a runtime or packaging defect:
+
+- the `sessions/mission-*.jsonl` inspection examples appeared runnable before the README had
+  generated those files, producing file-not-found errors;
+- the external alarm-policy example referenced an illustrative file that is not shipped; the
+  analogous external mission-profile path had the same latent ambiguity;
+- a first-time reader needed clearer guidance for interpreting `SUMMARY`, `SOURCES`, `DIAGNOSTICS`,
+  and `TIMELINE`, and for understanding the conservative provenance wording;
+- `fingerprint` needed an early plain-language definition;
+- the static session visual could be mistaken for a UI launched by `make session-demo`;
+- the distinctions among `session-demo`, `alarm-demo`, and `profile-demo`, and the roles of the
+  terminals in manual workflows, needed clearer signposting.
+
+The walkthrough-fix tranche addresses these findings by making the committed sample the first
+copy/paste inspection path, labeling generated and illustrative paths explicitly, adding a report
+reading order and fingerprint/provenance explanation, clarifying that the visual is static, and
+describing the purpose of the focused demos and terminal roles. Independent retest of the amended
+documentation remains required before the release PR is ready.
+
+Technical release-candidate preparation may continue while retest is pending, but the release PR is
+not ready for merge and v0.5.0 must not be published until material findings are resolved and
+independently retested.
 
 ### Walkthrough record template
 
@@ -124,7 +156,8 @@ private machine paths, or unrelated personal information.
 
 Before the v0.5.0 release PR is considered ready:
 
-- [ ] external walkthrough completed and recorded with genuine findings or a clean outcome;
+- [x] external walkthrough completed and recorded with genuine findings or a clean outcome;
+- [ ] walkthrough findings resolved and independently retested;
 - [ ] README and focused docs agree with the public CLI and current roadmap;
 - [ ] compatibility, operations, threat-model, known-limit, and security language reviewed;
 - [ ] raw benchmark and 60-minute soak evidence remain retained with valid checksums;

@@ -55,7 +55,14 @@ and `make link-demo`.
 ```bash
 orbitops alarm-policy list
 orbitops alarm-policy show thermal-demo
-orbitops alarm-policy validate file:policies/lab-policy.toml
+orbitops alarm-policy validate thermal-demo
+```
+
+The commands above are directly runnable from a fresh clone. For an external policy, replace the
+following illustrative path with a file that actually exists:
+
+```bash
+orbitops alarm-policy validate file:/path/to/lab-policy.toml
 ```
 
 Reference forms:
@@ -69,6 +76,11 @@ Ambiguous short references are rejected before the receiver binds UDP or creates
 
 ## Record a manual thermal alarm pass
 
+This direct path uses two terminals: Terminal 1 runs the receiving ground station and Terminal 2
+runs the spacecraft simulator that sends packets to it.
+
+Terminal 1:
+
 ```bash
 orbitops listen \
   --host 127.0.0.1 \
@@ -78,7 +90,7 @@ orbitops listen \
   --alarm-log sessions/thermal-alarms.jsonl
 ```
 
-In another terminal:
+Terminal 2:
 
 ```bash
 ./build/orbitops_sim \
@@ -141,6 +153,10 @@ schema-version-2 link events. It validates deterministic drops, profile identity
 fingerprint, forwarded packets, and final counters.
 
 ## Run a profile-driven linked session
+
+This path uses three terminals: Terminal 1 receives telemetry, Terminal 2 applies deterministic link
+impairments and forwards packets to Terminal 1, and Terminal 3 runs the spacecraft simulator that
+sends packets to Terminal 2.
 
 Terminal 1:
 
@@ -205,8 +221,10 @@ Do not place secrets in session identifiers, profile names, policy names, or loc
 External references may reveal directory names. Alarm logs may reveal sequence numbers,
 observed operational values, thresholds, modes, and human-readable messages.
 
-Fingerprints are not authentication or provenance mechanisms. Anyone able to modify a policy
-or log can replace both data and fingerprint.
+A fingerprint is a SHA-256 identifier of behavior-affecting configuration or policy values used
+for reproducibility; it is not personal or biometric information. Fingerprints are not
+authentication or provenance mechanisms. Anyone able to modify a policy or log can replace both
+data and fingerprint.
 
 ## Finite and interrupted runs
 
