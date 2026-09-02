@@ -4,6 +4,8 @@ All notable changes to OrbitOps are documented here. The project follows Semanti
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-09-02
+
 ### Added
 
 - explicit session-correlation semantics that preserve source-local clocks, order, and identity

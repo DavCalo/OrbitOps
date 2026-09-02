@@ -122,14 +122,11 @@ The walkthrough found documentation/usability friction rather than a runtime or 
   terminals in manual workflows, needed clearer signposting.
 
 The walkthrough-fix tranche addresses these findings by making the committed sample the first
-copy/paste inspection path, labeling generated and illustrative paths explicitly, adding a report
-reading order and fingerprint/provenance explanation, clarifying that the visual is static, and
-describing the purpose of the focused demos and terminal roles. Independent retest of the amended
-documentation remains required before the release PR is ready.
-
-Technical release-candidate preparation may continue while retest is pending, but the release PR is
-not ready for merge and v0.5.0 must not be published until material findings are resolved and
-independently retested.
+runnable session-inspection example, clarifying generated-file prerequisites, replacing placeholder
+validation paths with bundled resources, explaining the terminal-only demo and static visual, and
+describing the purpose of the focused demos and terminal roles. The amended documentation was
+subsequently independently retested at commit
+`757e2989dadfb1f782796ea0c00d7f137abdaa3d`, with all targeted findings reported as resolved.
 
 ### Walkthrough record template
 
@@ -152,22 +149,52 @@ Retest result:
 Retain only technical feedback needed for the release. Do not commit reviewer credentials,
 private machine paths, or unrelated personal information.
 
+### Independent remediation retest — 2 September 2026
+
+A second independent reviewer with no prior OrbitOps involvement retested the walkthrough
+remediation at commit `757e2989dadfb1f782796ea0c00d7f137abdaa3d`.
+
+Outcome: **PASS WITH MINOR COMMENTS**.
+
+All targeted walkthrough findings were independently reported as resolved:
+
+- the repository-hosted session-inspection sample is discoverable and runnable from a fresh clone;
+- generated `sessions/mission-*.jsonl` paths are identified as outputs that must exist before
+  inspection;
+- the alarm-policy and mission-profile validation examples are runnable rather than placeholder
+  paths;
+- `make session-demo` is clearly described as a terminal-only workflow and the README visual as a
+  static representation;
+- the report reading order and the meanings of fingerprint and cross-stream provenance are
+  understandable at a new-user level;
+- the purposes of `session-demo`, `alarm-demo`, and `profile-demo` are distinguishable;
+- multi-terminal ground-station, link-emulator, and simulator roles are understandable.
+
+No command errors were reported during the targeted retest.
+
+The reviewer noted three residual, non-blocking usability observations: the term
+“session inspection” may not be immediately discoverable to a non-technical first-time user;
+“fingerprint” can initially evoke credentials or other unrelated meanings before its explanation
+is read; and the role of the third terminal may still require minor inference. These observations
+are accepted as non-blocking for the v0.5.0 technical-preview release and do not invalidate the
+successful remediation retest.
+
 ## Release-candidate checklist
 
 Before the v0.5.0 release PR is considered ready:
 
 - [x] external walkthrough completed and recorded with genuine findings or a clean outcome;
-- [ ] walkthrough findings resolved and independently retested;
-- [ ] README and focused docs agree with the public CLI and current roadmap;
+- [x] walkthrough findings resolved and independently retested on commit `757e2989dadfb1f782796ea0c00d7f137abdaa3d`;
+- [x] README and focused docs agree with the public CLI and current roadmap;
 - [ ] compatibility, operations, threat-model, known-limit, and security language reviewed;
-- [ ] raw benchmark and 60-minute soak evidence remain retained with valid checksums;
-- [ ] Python reports `0.5.0`;
-- [ ] C++ simulator reports `0.5.0`;
-- [ ] committed sample bundle passes its regression check;
-- [ ] sdist/wheel build and package-resource checks pass;
-- [ ] installed session-inspection workflow passes from the built artifact;
-- [ ] fresh-clone maintainer `make verify` passes on the release candidate;
-- [ ] changelog and release notes describe v0.5.0 without unsupported claims;
+- [x] raw benchmark and 60-minute soak evidence remain retained with valid checksums;
+- [x] Python reports `0.5.0`;
+- [x] C++ simulator reports `0.5.0`;
+- [x] committed sample bundle passes its regression check;
+- [x] sdist/wheel build and package-resource checks pass;
+- [x] installed session-inspection workflow passes from the built artifact;
+- [x] fresh-clone maintainer `make verify` passes on the release candidate;
+- [x] changelog and release notes describe v0.5.0 without unsupported claims;
 - [ ] all seven required CI checks are green;
 - [ ] no unresolved `release blocker` remains other than issue #43 itself.
 
