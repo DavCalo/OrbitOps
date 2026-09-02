@@ -24,7 +24,7 @@ from orbitops.protocol import Mode, TelemetryPacket, encode_packet
 from orbitops.recorder import SessionRecorder
 from orbitops.session import REPORT_FORMAT, REPORT_FORMAT_VERSION, SessionReportDocument
 
-_EXPECTED_VERSION = "0.4.0"
+_EXPECTED_VERSION = "0.5.0"
 
 
 def _write_jsonl(path: Path, documents: Iterable[Mapping[str, object]]) -> None:

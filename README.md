@@ -10,7 +10,7 @@
   </a>
   <img src="https://img.shields.io/badge/C%2B%2B-17-00599C?style=flat-square&logo=c%2B%2B&logoColor=white" alt="C++17" />
   <img src="https://img.shields.io/badge/Python-3.11--3.13-3776AB?style=flat-square&logo=python&logoColor=FFD43B" alt="Python 3.11 to 3.13" />
-  <img src="https://img.shields.io/badge/Version-0.4.0-0F766E?style=flat-square" alt="OrbitOps version 0.4.0" />
+  <img src="https://img.shields.io/badge/Version-0.5.0-0F766E?style=flat-square" alt="OrbitOps version 0.5.0" />
   <a href="LICENSE">
     <img src="https://img.shields.io/badge/License-MIT-334155?style=flat-square" alt="MIT license" />
   </a>
@@ -474,10 +474,10 @@ session-inspection workflow.
 
 ### v0.5.0 release readiness
 
-The unified session-inspection demo and reproducible benchmark/soak evidence are complete. The
-remaining v0.5.0 work is release hardening: external usability walkthrough, focused documentation
-review, Python/C++ version alignment, release-candidate validation, and published-install
-verification. See the [release-readiness checklist](docs/release-readiness.md).
+v0.5.0 consolidates unified session inspection, the flagship demo, retained benchmark/soak
+evidence, a supported synthetic sample bundle, and aligned Python/C++ version surfaces. Release
+validation, the external usability walkthrough, and publication checks are documented in the
+[release-readiness checklist](docs/release-readiness.md).
 
 ### Product experience
 

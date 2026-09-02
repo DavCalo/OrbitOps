@@ -95,6 +95,10 @@ maintainer-only command transcript. The reviewer should use a fresh clone/enviro
 
 A clean outcome is valid evidence. Do not manufacture friction merely to produce findings.
 
+Technical release-candidate preparation may continue while this walkthrough is pending, but the
+release PR is not ready for merge and v0.5.0 must not be published until a real reviewer completes
+the walkthrough and any material findings are resolved and retested.
+
 ### Walkthrough record template
 
 ```text
