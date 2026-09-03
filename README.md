@@ -521,24 +521,20 @@ session-inspection workflow.
 
 ## Roadmap
 
-### v0.5.0 release readiness
+OrbitOps v0.5.0 is published and independently verified. The next committed release is a narrow
+**v0.5.1 correctness patch** covering known numeric/runtime defects and minimum C++ scenario
+regression coverage.
 
-v0.5.0 consolidates unified session inspection, the flagship demo, retained benchmark/soak
-evidence, a supported synthetic sample bundle, and aligned Python/C++ version surfaces. Release
-validation, the external usability walkthrough, and publication checks are documented in the
-[release-readiness checklist](docs/release-readiness.md).
+The planned v0.6.0 release then focuses on enforced evidence contracts, explicit resource
+boundaries, independent session-report validation, and correlation scalability. A static,
+browser-local Session Explorer remains the preferred v0.7.0 candidate only after those foundations
+are complete.
 
-### Product experience
+Command uplink, CCSDS adapters, hardware-in-the-loop, remote deployment, databases, RF propagation,
+and machine-learning anomaly detection remain research topics rather than release promises.
 
-- web-based session explorer;
-- OpenTelemetry metrics and logs;
-- optional Datadog dashboard and monitors;
-- command uplink with acknowledgements after the v0.5 inspection milestone.
-
-### Research track
-
-- CCSDS packet-layer research kept separate from the stable custom protocol;
-- signed run manifests where provenance requirements justify them.
+See the [post-v0.5.0 roadmap](docs/roadmap.md) for commitment levels, entry and exit gates,
+non-goals, and roadmap governance.
 
 ## Governance and security
 
