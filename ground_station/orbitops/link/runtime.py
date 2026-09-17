@@ -295,7 +295,9 @@ class LinkRuntime:
     ) -> None:
         """Run until stopped, or until ``max_packets`` are received and drained."""
 
-        if isinstance(max_packets, bool):
+        if max_packets is not None and (
+            isinstance(max_packets, bool) or not isinstance(max_packets, int)
+        ):
             raise TypeError("max_packets must be an integer or None")
         if max_packets is not None and max_packets <= 0:
             raise ValueError("max_packets must be positive")

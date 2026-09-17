@@ -4,7 +4,9 @@ import binascii
 import struct
 import sys
 import unittest
+from dataclasses import replace
 from pathlib import Path
+from typing import Any
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "ground_station"))
@@ -76,10 +78,67 @@ class ProtocolTests(unittest.TestCase):
         with self.assertRaisesRegex(ProtocolError, "invalid mode"):
             decode_packet(bytes(encoded))
 
-    def test_encode_validates_numeric_ranges(self) -> None:
+    def test_encode_rejects_invalid_integer_field_types(self) -> None:
+        fields = (
+            "sequence",
+            "timestamp_ms",
+            "battery_mv",
+            "bus_current_ma",
+            "temperature_centi_c",
+            "roll_centi_deg",
+            "pitch_centi_deg",
+            "yaw_centi_deg",
+        )
+        invalid_values: tuple[Any, ...] = (True, False, 1.5, "1")
+        for field in fields:
+            for invalid_value in invalid_values:
+                with self.subTest(field=field, invalid_value=invalid_value):
+                    invalid = replace(self.sample(), **{field: invalid_value})
+                    with self.assertRaisesRegex(TypeError, rf"{field} must be an integer"):
+                        encode_packet(invalid)
+
+    def test_encode_preserves_integer_field_boundaries(self) -> None:
+        boundaries: dict[str, tuple[Any, Any]] = {
+            "sequence": (0, 0xFFFFFFFF),
+            "timestamp_ms": (0, 0xFFFFFFFFFFFFFFFF),
+            "battery_mv": (0, 0xFFFF),
+            "bus_current_ma": (0, 0xFFFF),
+            "temperature_centi_c": (-0x8000, 0x7FFF),
+            "roll_centi_deg": (-0x8000, 0x7FFF),
+            "pitch_centi_deg": (-0x8000, 0x7FFF),
+            "yaw_centi_deg": (-0x8000, 0x7FFF),
+        }
+        for field, values in boundaries.items():
+            for value in values:
+                with self.subTest(field=field, value=value):
+                    packet = replace(self.sample(), **{field: value})
+                    decoded = decode_packet(encode_packet(packet))
+                    self.assertEqual(getattr(decoded, field), value)
+
+    def test_encode_rejects_out_of_range_integer_field(self) -> None:
         invalid = TelemetryPacket(**{**self.sample().__dict__, "battery_mv": 70_000})
         with self.assertRaisesRegex(ProtocolError, "battery_mv"):
             encode_packet(invalid)
+
+    def test_encode_validates_mode_type_and_domain(self) -> None:
+        valid_modes: tuple[Any, ...] = (Mode.BOOT, Mode.NOMINAL, Mode.SAFE, 0, 1, 2)
+        for valid_mode in valid_modes:
+            with self.subTest(valid_mode=valid_mode):
+                packet = replace(self.sample(), mode=valid_mode)
+                decoded = decode_packet(encode_packet(packet))
+                self.assertEqual(decoded.mode, Mode(int(valid_mode)))
+
+        invalid_modes: tuple[Any, ...] = (True, False, 1.0, "1")
+        for invalid_mode in invalid_modes:
+            with self.subTest(invalid_mode=invalid_mode):
+                packet = replace(self.sample(), mode=invalid_mode)
+                with self.assertRaisesRegex(TypeError, "mode must be a Mode or integer"):
+                    encode_packet(packet)
+
+        invalid_mode_value: Any = 99
+        invalid_value = replace(self.sample(), mode=invalid_mode_value)
+        with self.assertRaisesRegex(ProtocolError, "invalid mode"):
+            encode_packet(invalid_value)
 
 
 if __name__ == "__main__":
