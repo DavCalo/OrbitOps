@@ -101,6 +101,11 @@ Terminal 2:
   --scenario thermal
 ```
 
+The thermal scenario is representable through sequence `419` (420 packets starting at sequence
+`0`). If a run reaches sequence `420`, the simulator exits non-zero before encoding or transmitting
+that packet because `temperature_centi_c` no longer fits the protocol-v1 signed 16-bit field. This
+fail-closed boundary is intentional; telemetry is not silently clamped or wrapped.
+
 Stop the listener with `Ctrl+C` after the simulator completes. Cooperative shutdown writes the
 final alarm summary. Telemetry and alarm events remain separate files.
 
