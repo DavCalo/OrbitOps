@@ -9,6 +9,8 @@ All notable changes to OrbitOps are documented here. The project follows Semanti
 - thermal simulator generation now fails closed before packet emission when a fixed-width telemetry
   value cannot be represented, preventing temperature wrap or sign inversion at thermal sequence
   `420`.
+- Python telemetry encoding and link runtime APIs now reject boolean and non-integer values for
+  integer-valued arguments while preserving existing valid integer ranges and sentinels.
 
 ## [0.5.0] - 2026-09-02
 
