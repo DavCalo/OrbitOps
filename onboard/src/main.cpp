@@ -1,10 +1,9 @@
+#include "orbitops/scenario.hpp"
 #include "orbitops/telemetry.hpp"
 
 #include <arpa/inet.h>
-#include <algorithm>
 #include <atomic>
 #include <chrono>
-#include <cmath>
 #include <csignal>
 #include <cstdlib>
 #include <cstring>
@@ -22,28 +21,6 @@
 namespace {
 
 std::atomic_bool g_running{true};
-
-// Deterministic demonstration curves, not physical spacecraft models. Names
-// include units because these values are compatibility-sensitive to demos.
-constexpr double kScenarioPhaseDivisor = 8.0;
-constexpr double kNominalTemperatureC = 24.0;
-constexpr double kTemperatureOscillationC = 1.8;
-constexpr double kNominalBatteryV = 8.1;
-constexpr double kNominalBatteryDrainPerPacketV = 0.0025;
-constexpr double kThermalRisePerPacketC = 0.72;
-constexpr double kPowerDrainPerPacketV = 0.035;
-constexpr double kSafeTemperatureC = 60.0;
-constexpr double kSafeBatteryV = 7.0;
-constexpr std::uint32_t kBootPacketCount = 3;
-constexpr double kMillivoltsPerVolt = 1000.0;
-constexpr double kCentiUnitsPerUnit = 100.0;
-constexpr double kNominalBusCurrentMa = 420.0;
-constexpr double kBusCurrentOscillationMa = 35.0;
-constexpr double kRollAmplitudeCentiDeg = 450.0;
-constexpr double kPitchAmplitudeCentiDeg = 320.0;
-constexpr double kYawStepCentiDeg = 725.0;
-constexpr double kHalfTurnCentiDeg = 18000.0;
-constexpr double kFullTurnCentiDeg = 36000.0;
 
 void handle_signal(int) {
     g_running.store(false);
@@ -80,7 +57,7 @@ struct Options {
     int interval_ms = 1000;
     int packets = 0; // 0 means unlimited
     int drop_every = 0;
-    std::string scenario = "nominal";
+    orbitops::Scenario scenario = orbitops::Scenario::Nominal;
 };
 
 int parse_int(const char* value, const char* name) {
@@ -119,7 +96,16 @@ Options parse_options(int argc, char** argv) {
         } else if (arg == "--drop-every") {
             options.drop_every = parse_int(require_value("--drop-every"), "--drop-every");
         } else if (arg == "--scenario") {
-            options.scenario = require_value("--scenario");
+            const std::string scenario = require_value("--scenario");
+            if (scenario == "nominal") {
+                options.scenario = orbitops::Scenario::Nominal;
+            } else if (scenario == "thermal") {
+                options.scenario = orbitops::Scenario::Thermal;
+            } else if (scenario == "power") {
+                options.scenario = orbitops::Scenario::Power;
+            } else {
+                throw std::runtime_error("scenario must be nominal, thermal, or power");
+            }
         } else if (arg == "--version") {
             std::cout << "orbitops_sim " << ORBITOPS_VERSION << '\n';
             std::exit(0);
@@ -151,10 +137,6 @@ Options parse_options(int argc, char** argv) {
     if (options.packets < 0 || options.drop_every < 0) {
         throw std::runtime_error("packet counts cannot be negative");
     }
-    if (options.scenario != "nominal" && options.scenario != "thermal" &&
-        options.scenario != "power") {
-        throw std::runtime_error("scenario must be nominal, thermal, or power");
-    }
     return options;
 }
 
@@ -165,47 +147,16 @@ std::uint64_t now_ms() {
             .count());
 }
 
-orbitops::Telemetry make_telemetry(std::uint32_t sequence, const Options& options) {
-    const double phase = static_cast<double>(sequence) / kScenarioPhaseDivisor;
-    double temperature =
-        kNominalTemperatureC + kTemperatureOscillationC * std::sin(phase);
-    double battery =
-        kNominalBatteryV -
-        kNominalBatteryDrainPerPacketV * static_cast<double>(sequence);
-
-    if (options.scenario == "thermal") {
-        temperature += kThermalRisePerPacketC * static_cast<double>(sequence);
-    } else if (options.scenario == "power") {
-        battery -= kPowerDrainPerPacketV * static_cast<double>(sequence);
+const char* scenario_name(orbitops::Scenario scenario) {
+    switch (scenario) {
+        case orbitops::Scenario::Nominal:
+            return "nominal";
+        case orbitops::Scenario::Thermal:
+            return "thermal";
+        case orbitops::Scenario::Power:
+            return "power";
     }
-
-    orbitops::SpacecraftMode mode = orbitops::SpacecraftMode::Nominal;
-    if (temperature >= kSafeTemperatureC || battery <= kSafeBatteryV) {
-        mode = orbitops::SpacecraftMode::Safe;
-    } else if (sequence < kBootPacketCount) {
-        mode = orbitops::SpacecraftMode::Boot;
-    }
-
-    orbitops::Telemetry telemetry;
-    telemetry.sequence = sequence;
-    telemetry.timestamp_ms = now_ms();
-    telemetry.mode = mode;
-    telemetry.battery_mv = static_cast<std::uint16_t>(
-        std::round(std::max(0.0, battery) * kMillivoltsPerVolt));
-    telemetry.bus_current_ma = static_cast<std::uint16_t>(std::round(
-        kNominalBusCurrentMa + kBusCurrentOscillationMa * std::sin(phase * 0.7)));
-    telemetry.temperature_centi_c = static_cast<std::int16_t>(
-        std::round(temperature * kCentiUnitsPerUnit));
-    telemetry.roll_centi_deg = static_cast<std::int16_t>(
-        std::round(kRollAmplitudeCentiDeg * std::sin(phase * 0.5)));
-    telemetry.pitch_centi_deg = static_cast<std::int16_t>(
-        std::round(kPitchAmplitudeCentiDeg * std::cos(phase * 0.4)));
-    telemetry.yaw_centi_deg = static_cast<std::int16_t>(
-        std::fmod(
-            static_cast<double>(sequence) * kYawStepCentiDeg + kHalfTurnCentiDeg,
-            kFullTurnCentiDeg) -
-        kHalfTurnCentiDeg);
-    return telemetry;
+    return "unknown";
 }
 
 const char* mode_name(orbitops::SpacecraftMode mode) {
@@ -237,12 +188,13 @@ int main(int argc, char** argv) {
         }
 
         std::cout << "OrbitOps simulator " << ORBITOPS_VERSION << " -> " << options.host << ':'
-                  << options.port << " scenario=" << options.scenario << '\n';
+                  << options.port << " scenario=" << scenario_name(options.scenario) << '\n';
 
         std::uint32_t sequence = 0;
         while (g_running.load() &&
                (options.packets == 0 || sequence < static_cast<std::uint32_t>(options.packets))) {
-            const auto telemetry = make_telemetry(sequence, options);
+            const auto telemetry = orbitops::make_scenario_telemetry(
+                sequence, now_ms(), options.scenario);
             const bool intentionally_dropped = options.drop_every > 0 && sequence > 0 &&
                                                sequence % static_cast<std::uint32_t>(options.drop_every) == 0;
 
