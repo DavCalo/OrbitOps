@@ -30,8 +30,12 @@ function(orbitops_apply_quality_options target)
     endif()
 endfunction()
 
+add_library(orbitops_scenario STATIC src/scenario.cpp)
+target_include_directories(orbitops_scenario PUBLIC include)
+orbitops_apply_quality_options(orbitops_scenario)
+
 add_executable(orbitops_sim src/main.cpp)
-target_include_directories(orbitops_sim PRIVATE include)
+target_link_libraries(orbitops_sim PRIVATE orbitops_scenario)
 target_compile_definitions(orbitops_sim PRIVATE ORBITOPS_VERSION="${PROJECT_VERSION}")
 orbitops_apply_quality_options(orbitops_sim)
 
@@ -42,4 +46,9 @@ if(BUILD_TESTING)
     target_include_directories(orbitops_packet_test PRIVATE include)
     orbitops_apply_quality_options(orbitops_packet_test)
     add_test(NAME packet_encoding COMMAND orbitops_packet_test)
+
+    add_executable(orbitops_scenario_test tests/test_scenario.cpp)
+    target_link_libraries(orbitops_scenario_test PRIVATE orbitops_scenario)
+    orbitops_apply_quality_options(orbitops_scenario_test)
+    add_test(NAME scenario_generation COMMAND orbitops_scenario_test)
 endif()
