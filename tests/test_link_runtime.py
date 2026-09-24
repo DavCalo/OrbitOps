@@ -4,6 +4,7 @@ import signal
 import socket
 import threading
 import unittest
+from typing import Any
 from unittest import mock
 
 from orbitops.link import LinkConfig
@@ -117,13 +118,22 @@ class LinkRuntimeTests(unittest.TestCase):
             _ = runtime.bound_address
         with self.assertRaises(RuntimeError):
             runtime.run(max_packets=1)
-        with self.assertRaises(TypeError):
-            runtime.run(max_packets=True)
+        invalid_max_packets_values: tuple[Any, ...] = (True, False, 1.5, "1", object())
+        for invalid_max_packets in invalid_max_packets_values:
+            with (
+                self.subTest(invalid_max_packets=invalid_max_packets),
+                self.assertRaisesRegex(TypeError, "max_packets must be an integer or None"),
+            ):
+                runtime.run(max_packets=invalid_max_packets)
+        for invalid_max_packets in (0, -1):
+            with (
+                self.subTest(invalid_max_packets=invalid_max_packets),
+                self.assertRaisesRegex(ValueError, "max_packets must be positive"),
+            ):
+                runtime.run(max_packets=invalid_max_packets)
         runtime.open()
         with self.assertRaises(RuntimeError):
             runtime.open()
-        with self.assertRaises(ValueError):
-            runtime.run(max_packets=0)
         runtime.close()
         runtime.close()
 

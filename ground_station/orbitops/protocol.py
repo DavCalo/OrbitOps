@@ -55,23 +55,27 @@ def _crc32(data: bytes) -> int:
     return binascii.crc32(data) & 0xFFFFFFFF
 
 
-def _require_range(name: str, value: int, minimum: int, maximum: int) -> None:
+def _require_int_range(name: str, value: object, minimum: int, maximum: int) -> None:
+    if isinstance(value, bool) or not isinstance(value, int):
+        raise TypeError(f"{name} must be an integer")
     if not minimum <= value <= maximum:
         raise ProtocolError(f"{name} must be between {minimum} and {maximum}, got {value}")
 
 
 def _validate_packet(packet: TelemetryPacket) -> None:
-    _require_range("sequence", packet.sequence, 0, 0xFFFFFFFF)
-    _require_range("timestamp_ms", packet.timestamp_ms, 0, 0xFFFFFFFFFFFFFFFF)
-    _require_range("battery_mv", packet.battery_mv, 0, 0xFFFF)
-    _require_range("bus_current_ma", packet.bus_current_ma, 0, 0xFFFF)
+    _require_int_range("sequence", packet.sequence, 0, 0xFFFFFFFF)
+    _require_int_range("timestamp_ms", packet.timestamp_ms, 0, 0xFFFFFFFFFFFFFFFF)
+    _require_int_range("battery_mv", packet.battery_mv, 0, 0xFFFF)
+    _require_int_range("bus_current_ma", packet.bus_current_ma, 0, 0xFFFF)
     for name, value in (
         ("temperature_centi_c", packet.temperature_centi_c),
         ("roll_centi_deg", packet.roll_centi_deg),
         ("pitch_centi_deg", packet.pitch_centi_deg),
         ("yaw_centi_deg", packet.yaw_centi_deg),
     ):
-        _require_range(name, value, -0x8000, 0x7FFF)
+        _require_int_range(name, value, -0x8000, 0x7FFF)
+    if isinstance(packet.mode, bool) or not isinstance(packet.mode, int):
+        raise TypeError("mode must be a Mode or integer")
     try:
         Mode(packet.mode)
     except ValueError as exc:
