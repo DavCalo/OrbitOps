@@ -10,7 +10,7 @@
   </a>
   <img src="https://img.shields.io/badge/C%2B%2B-17-00599C?style=flat-square&logo=c%2B%2B&logoColor=white" alt="C++17" />
   <img src="https://img.shields.io/badge/Python-3.11--3.13-3776AB?style=flat-square&logo=python&logoColor=FFD43B" alt="Python 3.11 to 3.13" />
-  <img src="https://img.shields.io/badge/Version-0.5.0-0F766E?style=flat-square" alt="OrbitOps version 0.5.0" />
+  <img src="https://img.shields.io/badge/Version-0.5.1-0F766E?style=flat-square" alt="OrbitOps version 0.5.1" />
   <a href="LICENSE">
     <img src="https://img.shields.io/badge/License-MIT-334155?style=flat-square" alt="MIT license" />
   </a>
@@ -521,9 +521,8 @@ session-inspection workflow.
 
 ## Roadmap
 
-OrbitOps v0.5.0 is published and independently verified. The next committed release is a narrow
-**v0.5.1 correctness patch** covering known numeric/runtime defects and minimum C++ scenario
-regression coverage.
+OrbitOps v0.5.1 is a narrow correctness patch covering the thermal-scenario range-safety fix,
+strict Python numeric API invariants, and minimum C++ scenario regression coverage.
 
 The planned v0.6.0 release then focuses on enforced evidence contracts, explicit resource
 boundaries, independent session-report validation, and correlation scalability. A static,

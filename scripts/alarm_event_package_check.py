@@ -18,7 +18,7 @@ from orbitops.alarm_events import (
 )
 from orbitops.alarm_policies import alarm_policy_fingerprint, load_builtin_alarm_policy
 
-_EXPECTED_VERSION = "0.5.0"
+_EXPECTED_VERSION = "0.5.1"
 
 
 def main() -> int:
