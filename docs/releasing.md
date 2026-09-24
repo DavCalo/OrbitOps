@@ -3,24 +3,26 @@
 OrbitOps uses Semantic Versioning for published technical-preview releases. The maintainer performs
 all GitHub writes, tagging, artifact attachment, and publication.
 
+The release-specific issue is authoritative for release scope, blockers, and any additional gates.
+The generic process below must not weaken those requirements.
+
 ## Release-candidate preparation
 
-Technical preparation may proceed while the external walkthrough is pending, but the release PR is
-not ready for merge and the release must not be published until that walkthrough is complete and any
-material findings are resolved.
-
-1. Start from a clean `main` with all required CI checks green.
-2. Update the Python version in `ground_station/orbitops/__init__.py`.
-3. Update the CMake project version in `onboard/CMakeLists.txt`.
-4. Update exact-version package checks and any committed generated visual that displays the release
-   version.
-5. Review README, operations, threat-model, security, compatibility, sample-bundle, benchmark/soak,
-   and release-readiness wording.
-6. Complete the external walkthrough required by `docs/release-readiness.md` and resolve/retest any
-   material finding.
-7. Once the actual publication date is known, move the accumulated `Unreleased` entries into a dated
-   `CHANGELOG.md` section and finalize the v0.5.0 release notes.
-8. From a clean release-candidate checkout, run:
+1. Start from a clean, current `main` after all release-blocking implementation issues have been
+   merged and independently verified.
+2. Create a focused release branch from that exact `main` commit.
+3. Update the Python version in `ground_station/orbitops/__init__.py`.
+4. Update the CMake project version in `onboard/CMakeLists.txt`.
+5. Update exact-version package checks, README version surfaces, and any committed generated visual
+   that displays the release version.
+6. Review operations, threat-model, security, compatibility, sample-bundle, retained evidence, and
+   release-readiness wording for impact from the release changes.
+7. Complete an external usability walkthrough only when the release issue requires one or when the
+   release materially changes the documented onboarding/operator workflow. Resolve and retest any
+   material finding before making the release PR ready.
+8. Once the intended publication date is known, move the accumulated `Unreleased` entries into a
+   dated `CHANGELOG.md` section and finalize focused release notes under `docs/releases/`.
+9. From a clean release-candidate checkout, run:
 
    ```bash
    make clean
@@ -28,14 +30,14 @@ material findings are resolved.
    make verify
    ```
 
-9. Confirm both public version surfaces report `0.5.0`:
+10. Confirm both public version surfaces report the intended release version:
 
-   ```bash
-   orbitops --version
-   ./build/orbitops_sim --version
-   ```
+    ```bash
+    orbitops --version
+    ./build/orbitops_sim --version
+    ```
 
-10. Run the supported sample session and the installed demos:
+11. Run the supported sample session and installed demos:
 
     ```bash
     orbitops session inspect \
@@ -48,21 +50,23 @@ material findings are resolved.
     make session-demo
     ```
 
-11. Build the distribution artifacts and run the package-resource checks:
+12. Build the distribution artifacts and run the package-resource checks:
 
     ```bash
     make package
     ```
 
-12. Validate the built wheel from a fresh virtual environment, without relying on the source checkout
-    as the installed package:
+13. Validate the built wheel from a fresh virtual environment, without relying on the source checkout
+    as the installed package. Set `VERSION` to the release version first:
 
     ```bash
+    VERSION="$(PYTHONPATH="$PWD/ground_station" python3 -c 'import orbitops; print(orbitops.__version__)')"
     release_root="$(mktemp -d)"
     release_python="$release_root/venv/bin/python"
+    release_wheel="dist/orbitops_ground_station-${VERSION}-py3-none-any.whl"
 
     python3 -m venv "$release_root/venv"
-    "$release_python" -m pip install --no-deps dist/orbitops_ground_station-0.5.0-py3-none-any.whl
+    "$release_python" -m pip install --no-deps "$release_wheel"
 
     "$release_root/venv/bin/orbitops" --version
     "$release_root/venv/bin/orbitops" session inspect \
@@ -76,65 +80,66 @@ material findings are resolved.
       "$release_python" scripts/session_inspection_package_check.py
     ```
 
-13. Confirm `docs/evidence/SHA256SUMS.txt` still validates the retained benchmark and 60-minute soak
-    JSON evidence. Those measurements are reference evidence only, not a performance SLA or general
-    reliability guarantee.
-14. Confirm supported Python versions and operating systems still match CI.
-15. Review `docs/threat-model.md` and `SECURITY.md`; retain explicit non-flight, unauthenticated-UDP,
-    non-RF, and non-CCSDS positioning.
+14. Confirm `docs/evidence/SHA256SUMS.txt` still validates any retained reference evidence that the
+    release issue requires preserving. Do not reinterpret retained measurements as a performance SLA
+    or general reliability guarantee.
+15. Confirm supported Python versions and operating systems still match CI.
+16. Review `docs/threat-model.md` and `SECURITY.md`; retain explicit non-flight, unauthenticated-UDP,
+    non-RF, and non-CCSDS positioning unless a separately reviewed change explicitly alters a boundary.
 
-## Compatibility review for v0.5.0
+## Compatibility review
 
-The v0.5.0 release makes these explicit compatibility decisions:
+For every release, record whether each public compatibility surface is unchanged, additively changed,
+or intentionally broken. At minimum review:
 
-- binary telemetry protocol remains version `1`;
-- telemetry recording remains record version `1`;
-- mission-profile schema remains version `1`;
-- link-event emission remains schema version `2`, with schema-version-1 reading preserved;
-- alarm-policy schema remains version `1`;
-- alarm-event schema remains version `1`;
-- built-in mission profiles and alarm policies keep their published names and deterministic
-  fingerprints for unchanged behavior;
-- telemetry recordings, link events, and alarm events remain separate source contracts;
-- `orbitops session inspect` validates those sources independently and does not claim provenance merely
-  because files were selected together;
-- telemetry/alarm exact correlation still requires one unique decoded packet-sequence match;
-- link `packet_index` remains a separate namespace from telemetry `packet_sequence`;
-- session filters affect rendered timeline entries only and do not rewrite unfiltered source counters;
-- the public JSON report contract remains `orbitops.session_report/v1`;
-- CLI exit codes distinguish complete, incomplete, usage, incompatible, malformed, and I/O outcomes;
-- retained benchmark and soak files remain reproducibility evidence, not release-performance budgets or
-  certification.
+- binary telemetry protocol version and byte layout;
+- telemetry recording version;
+- mission-profile schema;
+- link-event emitted/readable schema versions;
+- alarm-policy schema;
+- alarm-event schema;
+- built-in mission-profile and alarm-policy names and fingerprints;
+- telemetry, link-event, and alarm-event source boundaries;
+- session-inspection correlation semantics and source identity assumptions;
+- the public `orbitops.session_report` format;
+- CLI syntax and exit-code semantics.
+
+A patch release must not silently change a serialized compatibility contract.
 
 ## Release PR
 
 Before the release PR is ready to merge:
 
-- all items in `docs/release-readiness.md` that apply before publication are complete;
+- all release-specific pre-publication requirements are complete;
 - the PR carries `release` and `release blocker`;
-- the PR references issue #43 without an auto-closing keyword;
-- all seven required CI checks are green;
-- no unresolved `release blocker` remains other than issue #43 itself, which stays open through
+- the PR references the release issue without an auto-closing keyword;
+- all seven required CI checks are green on the final PR head;
+- no unresolved release blocker remains other than the release issue itself, which stays open through
   publication verification.
 
 ## Tag and publish
 
-After the release PR is merged, `main` is synchronized with `--ff-only`, and the merged tree is
-verified:
+After the release PR is squash-merged, synchronize `main` with `--ff-only` and run the complete
+post-merge verification before creating a tag. Set `VERSION` to the verified release version:
 
 ```bash
-VERSION=0.5.0
+VERSION="$(PYTHONPATH="$PWD/ground_station" python3 -c 'import orbitops; print(orbitops.__version__)')"
 git tag -a "v${VERSION}" -m "OrbitOps v${VERSION}"
 git push origin "v${VERSION}"
 ```
 
-Create the GitHub Release from that tag using `docs/releases/v0.5.0.md` as the release-note source.
-Attach the built wheel and source distribution when they are part of the supported publication path,
-and publish SHA-256 checksums for manually attached artifacts.
+Create the GitHub Release from the matching `docs/releases/v${VERSION}.md` release-note source.
+Attach the supported wheel and source distribution and publish a SHA-256 manifest for manually
+attached artifacts.
 
-After publication, install the published wheel/artifact into another fresh virtual environment and
-verify `orbitops --version`, the installed session-inspection workflow, and the C++ version surface
-from the tagged source. Close #43, epic #37, and the v0.5.0 milestone only after those checks pass.
+After publication:
 
-Do not label the release as flight-ready, safety-certified, cryptographically secure, an RF model,
+1. download the published assets again rather than trusting the pre-publication copies;
+2. verify their SHA-256 checksums;
+3. install the downloaded wheel into another fresh virtual environment;
+4. verify `orbitops --version` and the supported installed package/session checks;
+5. check out the published tag and verify the C++ simulator version surface from tagged source;
+6. close the release issue and milestone only after every publication-verification gate passes.
+
+Do not label a release as flight-ready, safety-certified, cryptographically secure, an RF model,
 or CCSDS-compliant.
