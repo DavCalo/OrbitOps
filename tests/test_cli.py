@@ -90,6 +90,20 @@ class CliTests(unittest.TestCase):
             "file:policy.toml",
         )
 
+    def test_conflicting_listen_outputs_fail_cleanly(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            shared = Path(directory) / "capture.jsonl"
+            with self.assertRaisesRegex(SystemExit, r"listen failed: .*same destination"):
+                main(
+                    [
+                        "listen",
+                        "--record",
+                        str(shared),
+                        "--alarm-log",
+                        str(shared),
+                    ]
+                )
+
     def test_invalid_alarm_policy_fails_before_receiver_delegation(self) -> None:
         with (
             patch(

@@ -18,7 +18,12 @@ from orbitops.alarm_events import (  # noqa: E402
 )
 from orbitops.alarms import AlarmEngine  # noqa: E402
 from orbitops.protocol import Mode, TelemetryPacket, encode_packet  # noqa: E402
-from orbitops.receiver import format_packet, listen, process_packet  # noqa: E402
+from orbitops.receiver import (  # noqa: E402
+    RecordingPathConflictError,
+    format_packet,
+    listen,
+    process_packet,
+)
 
 
 def sample_packet(
@@ -62,6 +67,62 @@ class FakeSocket:
 
 
 class ReceiverTests(unittest.TestCase):
+    def _assert_recording_path_conflict(
+        self,
+        recording: Path,
+        alarm_log: Path,
+    ) -> None:
+        with (
+            patch("orbitops.receiver.socket.socket") as socket_factory,
+            patch("orbitops.receiver.SessionRecorder") as session_recorder,
+            patch("orbitops.receiver.AlarmEventRecorder") as alarm_recorder,
+            self.assertRaisesRegex(RecordingPathConflictError, "same destination"),
+        ):
+            listen(
+                "127.0.0.1",
+                9000,
+                recording,
+                alarm_log_path=alarm_log,
+            )
+        socket_factory.assert_not_called()
+        session_recorder.assert_not_called()
+        alarm_recorder.assert_not_called()
+
+    def test_listen_rejects_identical_recording_paths_before_side_effects(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            shared = Path(directory) / "capture.jsonl"
+            shared.write_text("preserve-me\n", encoding="utf-8")
+            self._assert_recording_path_conflict(shared, shared)
+            self.assertEqual(shared.read_text(encoding="utf-8"), "preserve-me\n")
+
+    def test_listen_rejects_normalized_recording_path_alias(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            recording = Path(directory) / "capture.jsonl"
+            alarm_log = Path(directory) / "nested" / ".." / "capture.jsonl"
+            self._assert_recording_path_conflict(recording, alarm_log)
+
+    def test_listen_rejects_symlink_recording_path_alias(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            recording = Path(directory) / "capture.jsonl"
+            alarm_log = Path(directory) / "alarms.jsonl"
+            try:
+                alarm_log.symlink_to(recording.name)
+            except (NotImplementedError, OSError) as exc:
+                self.skipTest(f"symlinks are unavailable: {exc}")
+            self._assert_recording_path_conflict(recording, alarm_log)
+
+    def test_listen_rejects_hard_link_recording_path_alias(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            recording = Path(directory) / "capture.jsonl"
+            alarm_log = Path(directory) / "alarms.jsonl"
+            recording.write_text("preserve-me\n", encoding="utf-8")
+            try:
+                alarm_log.hardlink_to(recording)
+            except (NotImplementedError, OSError) as exc:
+                self.skipTest(f"hard links are unavailable: {exc}")
+            self._assert_recording_path_conflict(recording, alarm_log)
+            self.assertEqual(recording.read_text(encoding="utf-8"), "preserve-me\n")
+
     def test_format_packet(self) -> None:
         rendered = format_packet(sample_packet())
         self.assertIn("seq=00001", rendered)
