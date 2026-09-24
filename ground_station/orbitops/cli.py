@@ -12,7 +12,7 @@ from .alarms import DEFAULT_ALARM_POLICY, AlarmEngine
 from .link.cli import configure_link_parser, run_link_command
 from .profiles.cli import configure_profile_parser, run_profile_command
 from .protocol import ProtocolError, decode_packet
-from .receiver import listen, process_packet
+from .receiver import RecordingPathConflictError, listen, process_packet
 from .recorder import iter_records
 from .session.cli import configure_session_parser, run_session_command
 
@@ -108,7 +108,7 @@ def main(argv: list[str] | None = None) -> int:
             )
         except KeyboardInterrupt:
             print("\nGround station stopped.")
-        except OSError as exc:
+        except (OSError, RecordingPathConflictError) as exc:
             raise SystemExit(f"listen failed: {exc}") from exc
         return 0
 
