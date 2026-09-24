@@ -4,6 +4,8 @@ All notable changes to OrbitOps are documented here. The project follows Semanti
 
 ## [Unreleased]
 
+## [0.5.1] - 2026-09-24
+
 ### Fixed
 
 - thermal simulator generation now fails closed before packet emission when a fixed-width telemetry
