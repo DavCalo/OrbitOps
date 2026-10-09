@@ -4,6 +4,12 @@ All notable changes to OrbitOps are documented here. The project follows Semanti
 
 ## [Unreleased]
 
+### Fixed
+
+- `orbitops listen` rejects `--record` and `--alarm-log` paths that identify the same
+  output file, including detectable aliases, before opening sockets or recorders;
+  distinct-output recording and individual recorder overwrite behavior are unchanged.
+
 ## [0.5.1] - 2026-09-24
 
 ### Fixed

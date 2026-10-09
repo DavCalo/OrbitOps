@@ -222,6 +222,13 @@ effects.
 - each path is created or replaced for one run;
 - do not concatenate or interchange these schemas.
 
+When both `listen --record` and `listen --alarm-log` are set, their destinations must be
+different files. Identical paths and detectable aliases (normalized paths, symlinks, and
+existing hard links) fail with `listen failed: ... same destination` before the listener
+creates a UDP socket or opens either recorder. This is a pre-start check, not filesystem
+locking or protection against later concurrent path changes. Recording to distinct files
+and each recorder's existing create-or-replace behavior are unchanged.
+
 Do not place secrets in session identifiers, profile names, policy names, or local references.
 External references may reveal directory names. Alarm logs may reveal sequence numbers,
 observed operational values, thresholds, modes, and human-readable messages.

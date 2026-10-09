@@ -14,6 +14,28 @@ from .protocol import ProtocolError, TelemetryPacket, decode_packet
 from .recorder import SessionRecorder
 
 
+class RecordingPathConflictError(ValueError):
+    """Raised when simultaneous recording outputs identify the same file."""
+
+
+def _recording_paths_alias(left: Path, right: Path) -> bool:
+    with contextlib.suppress(OSError, RuntimeError):
+        if left.resolve(strict=False) == right.resolve(strict=False):
+            return True
+    try:
+        return left.samefile(right)
+    except OSError:
+        return False
+
+
+def _validate_recording_destinations(record_path: Path, alarm_log_path: Path) -> None:
+    if _recording_paths_alias(record_path, alarm_log_path):
+        raise RecordingPathConflictError(
+            "telemetry recording and alarm log must use different files: "
+            f"{record_path} and {alarm_log_path} refer to the same destination"
+        )
+
+
 def format_packet(packet: TelemetryPacket) -> str:
     return (
         f"seq={packet.sequence:05d} "
@@ -49,6 +71,8 @@ def listen(
     alarm_log_path: Path | None = None,
     alarm_policy_reference: str = "builtin:standard",
 ) -> None:
+    if record_path is not None and alarm_log_path is not None:
+        _validate_recording_destinations(record_path, alarm_log_path)
     engine = AlarmEngine(alarm_policy)
 
     with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
